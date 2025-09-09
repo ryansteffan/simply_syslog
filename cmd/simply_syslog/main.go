@@ -1,12 +1,12 @@
 package main
 
 import (
-	"github.com/ryansteffan/simply_syslog/internal/config"
+	"log/slog"
+
+	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
 func main() {
-	config, err := config.LoadConfig("")
-	if err != nil {
-		return
-	}
+	applogger.GetAppLogger(slog.LevelInfo)
+	slog.Info("sfsadf")
 }
