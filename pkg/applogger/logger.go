@@ -1,9 +1,8 @@
 package applogger
 
 type LogConfig struct {
-	Name    string
-	Level   LogLevel
-	Handler string
+	Name  string
+	Level LogLevel
 }
 
 type Logger interface {
@@ -17,21 +16,24 @@ type Logger interface {
 	Debug(message string)
 }
 
-func (logConf *LogConfig) Emergency(message string) {
-}
+func CreateLogger(name string, level LogLevel, handler Handler) Logger {
+	var logger Logger
 
-var Loggers = make(map[string]*LogConfig)
+	config := LogConfig{
+		Name:  name,
+		Level: level,
+	}
 
-var defaultLogger = &LogConfig{
-	Name:    "DEFAULT",
-	Level:   INFO,
-	Handler: "console",
-}
+	switch handler {
+	case FILE:
+		logger = &FileLogger{
+			Config: config,
+		}
+	case CONSOLE:
+		logger = &ConsoleLogger{
+			Config: config,
+		}
+	}
 
-func GetDefaultLogger() *LogConfig {
-	return defaultLogger
-}
-
-func CreateLogger(name string, level LogLevel, handler string) {
-
+	return logger
 }
