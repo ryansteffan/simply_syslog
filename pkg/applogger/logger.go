@@ -1,5 +1,9 @@
 package applogger
 
+import (
+	"errors"
+)
+
 type LogConfig struct {
 	Name  string
 	Level LogLevel
@@ -16,8 +20,11 @@ type Logger interface {
 	Debug(message string)
 }
 
-func CreateLogger(name string, level LogLevel, handler Handler) Logger {
+func NewLogger(name string, level LogLevel, handler Handler) (Logger, error) {
 	var logger Logger
+	var err error
+
+	facility := 5 // Level 5 is the level for syslog.
 
 	config := LogConfig{
 		Name:  name,
@@ -29,11 +36,17 @@ func CreateLogger(name string, level LogLevel, handler Handler) Logger {
 		logger = &FileLogger{
 			Config: config,
 		}
+		panic("unimplemented")
 	case CONSOLE:
-		logger = &ConsoleLogger{
-			Config: config,
-		}
+		logger, err = NewConsoleLogger(facility, LogConfig{
+			Name:  name,
+			Level: level,
+		})
 	}
 
-	return logger
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	return logger, nil
 }
