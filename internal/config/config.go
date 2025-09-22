@@ -8,12 +8,17 @@ import (
 	"os"
 )
 
+type Config struct {
+	FileLocation string
+	Data         ConfigData
+}
+
 /*
 Represents the JSON config file for the server.
 
 Tags correspond to the field in the JSON file.
 */
-type Config struct {
+type ConfigData struct {
 	Protocol            string `json:"protocol"`
 	Bind_Address        string `json:"bind_address"`
 	Udp_Port            string `json:"udp_port"`
@@ -42,10 +47,22 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	var config Config
-	err = json.Unmarshal(configFile, &config)
+	err = json.Unmarshal(configFile, &config.Data)
 	if err != nil {
 		return nil, errors.New("error parsing config file into struct")
 	}
 
+	config.FileLocation = path
+
 	return &config, nil
+}
+
+func (conf *Config) SaveConfig() error {
+	data, err := json.Marshal(conf.Data)
+	if err != nil {
+		return errors.New("there was an error encoding the save file")
+	}
+
+	os.WriteFile(conf.FileLocation, data, 0644)
+	return nil
 }
