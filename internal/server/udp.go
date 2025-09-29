@@ -38,7 +38,6 @@ func NewUDPServer(conf config.Config, logger applogger.Logger, channel chan Serv
 
 // start implements Server.
 func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
-	wg.Add(1)
 	defer wg.Done()
 
 	server, err := net.ListenUDP("udp", u.Addr)
