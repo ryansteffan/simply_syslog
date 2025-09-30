@@ -9,7 +9,7 @@ RUN go mod download
 RUN go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
 
 
-FROM scratch AS runner
+FROM ubuntu:latest AS runner
 
 # # Sets the enviroment variables used for configuration of the server.
 ENV PROTOCOL="UDP"

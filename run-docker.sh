@@ -1,0 +1,1 @@
+docker build -t test-syslog:latest . && docker run test-syslog && echo "Complete! Press enter to continue..."; read;

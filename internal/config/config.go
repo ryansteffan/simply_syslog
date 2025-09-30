@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"strconv"
 
 	"github.com/ryansteffan/simply_syslog/internal/utils"
 )
@@ -54,7 +53,7 @@ func LoadConfig(path string) (*Config, error) {
 	switch path {
 
 	case "ENV":
-		var envTypeError *error = new(error)
+		var envTypeError *error
 
 		conf := Config{
 			FileLocation: "ENV",
@@ -75,31 +74,20 @@ func LoadConfig(path string) (*Config, error) {
 					envTypeError,
 				),
 
-				Buffer_Lifespan: func() int {
-					result, err := strconv.Atoi(utils.DefaultStringValue(os.Getenv("BUFFER_LIFESPAN"), "5"))
-					if err != nil {
-						*envTypeError = err
-					}
+				Buffer_Lifespan: utils.InlineIntParse(
+					utils.DefaultStringValue(os.Getenv("BUFFER_LIFESPAN"), "5"),
+					envTypeError,
+				),
 
-					return result
-				}(),
-				Max_Message_Size: func() int {
-					result, err := strconv.Atoi(utils.DefaultStringValue(os.Getenv("MAX_MESSAGE_SIZE"), "1024"))
-					if err != nil {
-						*envTypeError = err
-					}
+				Max_Message_Size: utils.InlineIntParse(
+					utils.DefaultStringValue(os.Getenv("MAX_MESSAGE_SIZE"), "1024"),
+					envTypeError,
+				),
 
-					return result
-				}(),
-
-				Debug_Messages: func() bool {
-					result, err := strconv.ParseBool(utils.DefaultStringValue(os.Getenv("DEBUG_MESSAGES"), "True"))
-					if err != nil {
-						*envTypeError = err
-					}
-
-					return result
-				}(),
+				Debug_Messages: utils.InlineBoolParse(
+					utils.DefaultStringValue(os.Getenv("DEBUG_MESSAGES"), "True"),
+					envTypeError,
+				),
 			},
 		}
 
