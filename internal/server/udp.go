@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"net"
-	"strconv"
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
@@ -48,10 +47,7 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 
 	defer server.Close()
 
-	maxMessageSize, err := strconv.Atoi(u.Conf.Data.Max_Message_Size)
-	if err != nil {
-		return errors.New("there was an error parsing the max message size")
-	}
+	maxMessageSize := u.Conf.Data.Max_Message_Size
 
 	messageBuff := make([]byte, maxMessageSize)
 	for {

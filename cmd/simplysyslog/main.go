@@ -4,8 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"sync"
-
-	"github.com/ryansteffan/simply_syslog/internal/config"
 )
 
 var serverWaitGroups sync.WaitGroup
@@ -16,12 +14,7 @@ type Args struct {
 
 func main() {
 
-	serverConfig, err := config.LoadConfig("ENV")
-	if err != nil {
-		println(err.Error())
-	}
-
-	fmt.Printf("serverConfig: %v\n", serverConfig)
+	fmt.Println("Hello World!")
 
 	// args := ParseArgs()
 
