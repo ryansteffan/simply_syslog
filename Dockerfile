@@ -22,6 +22,7 @@ ENV BUFFER_LIFESPAN="5"
 ENV MAX_MESSAGE_SIZE="1024"
 ENV SYSLOG_PATH="/var/log/simply_syslog/"
 ENV DEBUG_MESSAGES="True"
+ENV SYSLOG_FORMATS="[{\"Version\":1,\"Name\":\"RFC3164\",\"Format\":\"^<(?<pri>\\\\d+)>(?<timestamp>\\\\w{3} +\\\\d{1,2} \\\\d{2}:\\\\d{2}:\\\\d{2}) (?<hostname>\\\\S+) (?<tag>\\\\S+?)(?:\\\\[(?<pid>\\\\d+)\\\\])?:? (?<message>.+)$\"},{\"Version\":1,\"Name\":\"RFC5424\",\"Format\":\"^<(?<pri>\\\\d+)>(?<version>\\\\d+) (?<timestamp>[^ ]+) (?<hostname>\\\\S+) (?<appname>\\\\S+) (?<procid>\\\\S+) (?<msgid>\\\\S+) (?<structured_data>(?:\\\\[[^\\\\]]*\\\\]|-)) ?(?<message>.*)$\"}]"
 
 WORKDIR /bin/
 
@@ -32,4 +33,4 @@ VOLUME [ ${SYSLOG_PATH} ]
 EXPOSE ${UDP_PORT}/udp
 EXPOSE ${TCP_PORT}/tcp
 
-CMD [ "simply-syslog", "-env" ]
+CMD [ "simply-syslog", "-env", "-env-regex" ]

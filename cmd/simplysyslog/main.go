@@ -15,7 +15,8 @@ import (
 var serverWaitGroups sync.WaitGroup
 
 type Args struct {
-	UseEnv bool
+	UseEnv      bool
+	UseEnvRegex bool
 }
 
 func main() {
@@ -49,7 +50,20 @@ func main() {
 
 	udpChannel := make(chan server.ServerChannelMessage)
 
-	syslogParser, err := syslog.NewEvenDrivenSyslogParser("./config/regex.json")
+	var syslogParser *syslog.EvenDrivenSyslogParser
+	if !args.UseEnvRegex {
+		syslogParser, err = syslog.NewEvenDrivenSyslogParser("./config/regex.json")
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
+	} else {
+		syslogParser, err = syslog.NewEvenDrivenSyslogParser("ENV")
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
+	}
 
 	if err != nil {
 		logger.Critical(err.Error())
@@ -78,10 +92,12 @@ func main() {
 
 func ParseArgs() Args {
 	useEnvFlag := flag.Bool("env", false, "Load configuration from environment variables.")
+	useEnvRegexFlag := flag.Bool("env-regex", false, "Load regex patterns from environment variables.")
 
 	flag.Parse()
 
 	return Args{
-		UseEnv: *useEnvFlag,
+		UseEnv:      *useEnvFlag,
+		UseEnvRegex: *useEnvRegexFlag,
 	}
 }
