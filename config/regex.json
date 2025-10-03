@@ -1,0 +1,12 @@
+[
+	{
+		"Version": 1,
+		"Name": "RFC3164",
+		"Format": "^<(?<pri>\\d+)>(?<timestamp>\\w{3} +\\d{1,2} \\d{2}:\\d{2}:\\d{2}) (?<hostname>\\S+) (?<tag>\\S+?)(?:\\[(?<pid>\\d+)\\])?:? (?<message>.+)$"
+	},
+	{
+		"Version": 1,
+		"Name": "RFC5424",
+		"Format": "^<(?<pri>\\d+)>(?<version>\\d+) (?<timestamp>[^ ]+) (?<hostname>\\S+) (?<appname>\\S+) (?<procid>\\S+) (?<msgid>\\S+) (?<structured_data>(?:\\[[^\\]]*\\]|-)) ?(?<message>.*)$"
+	}
+]

@@ -9,6 +9,44 @@
 			"program": "${workspaceFolder}/cmd/simplysyslog/main.go",
 			"args": ["-env"],
 			"env": {}
+		},
+		{
+			"name": "Debug SimplySyslog (Default Config)",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/cmd/simplysyslog/main.go",
+			"args": [],
+			"env": {
+				"CONFIG_PATH": "${workspaceFolder}/config/config.json",
+				"REGEX_PATH": "${workspaceFolder}/config/regex.json"
+			},
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"name": "Debug SimplySyslog (ENV Config)",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/cmd/simplysyslog/main.go",
+			"args": ["--env"],
+			"env": {
+				"SYSLOG_FORMATS": "<your_env_formats_json_here>"
+			},
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"name": "Debug SimplySyslog (Custom Regex)",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/cmd/simplysyslog/main.go",
+			"args": [],
+			"env": {
+				"CONFIG_PATH": "${workspaceFolder}/config/config.json",
+				"REGEX_PATH": "${workspaceFolder}/config/regex_custom.json"
+			},
+			"cwd": "${workspaceFolder}"
 		}
 	]
 }

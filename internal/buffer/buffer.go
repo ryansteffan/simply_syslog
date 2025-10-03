@@ -5,18 +5,19 @@ package buffer
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 /*
 Creates a generic buffer with a max size and a max age,
 and then returns a pointer to it.
 */
-func CreateBuffer[T any](maxSize int, maxAge int) *Buffer[T] {
+func NewBuffer[T any](maxLength int, maxAge int) *Buffer[T] {
 	return &Buffer[T]{
-		MaxSize:     maxSize,
+		MaxSize:     maxLength,
 		MaxAge:      maxAge,
 		CurrentSize: 0,
-		CurrentAge:  0,
+		CurrentAge:  time.Now(),
 		Data:        make([]T, 0),
 	}
 }
@@ -29,7 +30,7 @@ type Buffer[T any] struct {
 	MaxSize     int
 	MaxAge      int
 	CurrentSize int
-	CurrentAge  int
+	CurrentAge  time.Time
 	Data        []T
 }
 

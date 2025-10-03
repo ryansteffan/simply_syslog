@@ -8,6 +8,7 @@ import (
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
 	"github.com/ryansteffan/simply_syslog/internal/server"
+	"github.com/ryansteffan/simply_syslog/internal/syslog"
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
@@ -18,6 +19,7 @@ type Args struct {
 }
 
 func main() {
+
 	args := ParseArgs()
 
 	logger, err := applogger.NewLogger("simply-syslog", applogger.DEBUG, applogger.CONSOLE)
@@ -47,7 +49,19 @@ func main() {
 
 	udpChannel := make(chan server.ServerChannelMessage)
 
-	udpServer, err := server.NewUDPServer(*conf, logger, udpChannel)
+	syslogParser, err := syslog.NewEvenDrivenSyslogParser("./config/regex.json")
+
+	if err != nil {
+		logger.Critical(err.Error())
+		os.Exit(1)
+	}
+
+	logger.Info(fmt.Sprintf(
+		"Loaded %d syslog formats from %s",
+		len(*syslogParser.Formats), "./config/regex.json",
+	))
+
+	udpServer, err := server.NewUDPServer(*conf, logger, udpChannel, syslogParser)
 
 	if err != nil {
 		panic(err.Error())

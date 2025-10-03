@@ -26,7 +26,7 @@ func NewConsoleLogger(facility int, config LogConfig) (*ConsoleLogger, error) {
 		Hostname:      hostname,
 		Facility:      facility,
 		AppName:       config.Name,
-		MessageFormat: "<%d>%s %s: %s\n",
+		MessageFormat: "<%d>%s %s: %s -> %s\n",
 		DateFormat:    time.Stamp,
 	}, nil
 }
@@ -35,7 +35,7 @@ func NewConsoleLogger(facility int, config LogConfig) (*ConsoleLogger, error) {
 func (c *ConsoleLogger) Alert(message string) {
 	if c.Config.Level >= ALERT {
 		pri := (c.Facility * 8) + ALERT
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "ALERT", message)
 	}
 }
 
@@ -43,7 +43,7 @@ func (c *ConsoleLogger) Alert(message string) {
 func (c *ConsoleLogger) Critical(message string) {
 	if c.Config.Level >= CRITICAL {
 		pri := (c.Facility * 8) + CRITICAL
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "CRITICAL", message)
 	}
 }
 
@@ -51,7 +51,7 @@ func (c *ConsoleLogger) Critical(message string) {
 func (c *ConsoleLogger) Debug(message string) {
 	if c.Config.Level >= DEBUG {
 		pri := (c.Facility * 8) + DEBUG
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "DEBUG", message)
 	}
 }
 
@@ -59,7 +59,7 @@ func (c *ConsoleLogger) Debug(message string) {
 func (c *ConsoleLogger) Emergency(message string) {
 	if c.Config.Level >= EMERGENCY {
 		pri := (c.Facility * 8) + int(EMERGENCY)
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "EMERGENCY", message)
 	}
 }
 
@@ -67,7 +67,7 @@ func (c *ConsoleLogger) Emergency(message string) {
 func (c *ConsoleLogger) Error(message string) {
 	if c.Config.Level >= ERROR {
 		pri := (c.Facility * 8) + ERROR
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "ERROR", message)
 	}
 }
 
@@ -75,7 +75,7 @@ func (c *ConsoleLogger) Error(message string) {
 func (c *ConsoleLogger) Info(message string) {
 	if c.Config.Level >= INFO {
 		pri := (c.Facility * 8) + INFO
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "INFO", message)
 	}
 }
 
@@ -83,7 +83,7 @@ func (c *ConsoleLogger) Info(message string) {
 func (c *ConsoleLogger) Notice(message string) {
 	if c.Config.Level >= NOTICE {
 		pri := (c.Facility * 8) + NOTICE
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "NOTICE", message)
 	}
 }
 
@@ -91,7 +91,7 @@ func (c *ConsoleLogger) Notice(message string) {
 func (c *ConsoleLogger) Warn(message string) {
 	if c.Config.Level >= WARN {
 		pri := (c.Facility * 8) + WARN
-		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, message)
+		fmt.Printf(c.MessageFormat, pri, time.Now().Format(c.DateFormat), c.Hostname, "WARN", message)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
+	"github.com/ryansteffan/simply_syslog/internal/syslog"
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
@@ -14,10 +15,16 @@ type UDPSyslogServer struct {
 	Logger  applogger.Logger
 	Addr    *net.UDPAddr
 	Channel chan ServerChannelMessage
+	Parser  syslog.SyslogParser
 }
 
 // NewServer implements Server.
-func NewUDPServer(conf config.Config, logger applogger.Logger, channel chan ServerChannelMessage) (Server, error) {
+func NewUDPServer(
+	conf config.Config,
+	logger applogger.Logger,
+	channel chan ServerChannelMessage,
+	parser syslog.SyslogParser,
+) (Server, error) {
 	address := conf.Data.Bind_Address + ":" + conf.Data.Udp_Port
 	addr, err := net.ResolveUDPAddr("udp", address)
 
@@ -32,6 +39,7 @@ func NewUDPServer(conf config.Config, logger applogger.Logger, channel chan Serv
 		Logger:  logger,
 		Addr:    addr,
 		Channel: channel,
+		Parser:  parser,
 	}, nil
 }
 
@@ -58,6 +66,14 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 		}
 
 		u.Logger.Debug("Message received ->" + string(messageBuff[:size]))
+
+		format, err := u.Parser.DetectFormat(messageBuff[:size])
+		if err != nil {
+			u.Logger.Warn("There was an error detecting the format of the message from " + addr.String() + ": " + err.Error())
+		} else {
+			u.Logger.Info("Detected format: " + format.Name + " for message from " + addr.String())
+		}
+
 	}
 }
 

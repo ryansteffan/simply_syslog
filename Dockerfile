@@ -6,10 +6,10 @@ COPY . .
 
 RUN go mod download
 
-RUN go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
+RUN CGO_ENABLED=0 go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
 
 
-FROM ubuntu:latest AS runner
+FROM scratch AS runner
 
 # # Sets the enviroment variables used for configuration of the server.
 ENV PROTOCOL="UDP"
@@ -26,5 +26,10 @@ ENV DEBUG_MESSAGES="True"
 WORKDIR /bin/
 
 COPY --from=builder /build/simply-syslog .
+
+VOLUME [ ${SYSLOG_PATH} ]
+
+EXPOSE ${UDP_PORT}/udp
+EXPOSE ${TCP_PORT}/tcp
 
 CMD [ "simply-syslog", "-env" ]
