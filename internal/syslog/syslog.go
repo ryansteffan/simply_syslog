@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"sync"
 )
 
 type Format struct {
@@ -122,8 +123,21 @@ func (d *EvenDrivenSyslogParser) LoadFormatsFromFile(path string) error {
 }
 
 // ParseMessage implements SyslogParser.
-func (d *EvenDrivenSyslogParser) ParseMessage(message []byte) (map[string]string, error) {
-	panic("unimplemented")
+func (d *EvenDrivenSyslogParser) ParseMessage(message []byte, format *CompiledFormat) (map[string]string, error) {
+	if format == nil {
+		return nil, errors.New("no format provided for parsing")
+	}
+
+	itemMap := make(map[string]string)
+	data := format.Format.FindSubmatch(message)
+	names := format.Format.SubexpNames()
+
+	for i, name := range names {
+		if i > 0 && i < len(data) {
+			itemMap[name] = string(data[i])
+		}
+	}
+	return itemMap, nil
 }
 
 func (d *EvenDrivenSyslogParser) compileFormats() error {
@@ -150,8 +164,29 @@ type SyslogParser interface {
 	LoadFormatsFromENV() error
 	LoadFormatsFromFile(path string) error
 	LoadFormatsFromDB() error
-	ParseMessage(message []byte) (map[string]string, error)
+	ParseMessage(message []byte, format *CompiledFormat) (map[string]string, error)
 	DetectFormat(message []byte) (*CompiledFormat, error)
 }
 
 var _ SyslogParser = (*EvenDrivenSyslogParser)(nil)
+
+func HandleSyslogMessages(parser SyslogParser, messageChannel chan []byte, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
+
+	for message := range messageChannel {
+		format, err := parser.DetectFormat(message)
+		if err != nil {
+			println("No matching format found for message:", string(message))
+			continue
+		}
+
+		parsedMessage, err := parser.ParseMessage(message, format)
+		if err != nil {
+			println("Error parsing message:", err.Error())
+		}
+
+		for k, v := range parsedMessage {
+			println("Parsed", k, ":", v)
+		}
+	}
+}

@@ -19,6 +19,12 @@ type Args struct {
 	UseEnvRegex bool
 }
 
+type Channels struct {
+	SyslogChannel            chan []byte
+	WriteBufferInputChannel  chan map[string]string
+	WriteBufferOutputChannel chan map[string]string
+}
+
 func main() {
 
 	args := ParseArgs()
@@ -48,7 +54,7 @@ func main() {
 
 	logger.Debug("Config Data: " + fmt.Sprintf("%+v", conf))
 
-	udpChannel := make(chan server.ServerChannelMessage)
+	syslogChannel := make(chan []byte)
 
 	var syslogParser *syslog.EvenDrivenSyslogParser
 	if !args.UseEnvRegex {
@@ -75,7 +81,7 @@ func main() {
 		len(*syslogParser.Formats), "./config/regex.json",
 	))
 
-	udpServer, err := server.NewUDPServer(*conf, logger, udpChannel, syslogParser)
+	udpServer, err := server.NewUDPServer(*conf, logger, syslogChannel, syslogParser)
 
 	if err != nil {
 		panic(err.Error())
@@ -83,6 +89,8 @@ func main() {
 
 	logger.Info("Starting UDP Server...")
 
+	serverWaitGroups.Add(1)
+	go syslog.HandleSyslogMessages(syslogParser, syslogChannel, &serverWaitGroups)
 	serverWaitGroups.Add(1)
 	go udpServer.Start(&serverWaitGroups)
 
@@ -99,5 +107,21 @@ func ParseArgs() Args {
 	return Args{
 		UseEnv:      *useEnvFlag,
 		UseEnvRegex: *useEnvRegexFlag,
+	}
+}
+
+func CreateChannels(buffer *int) Channels {
+	if buffer == nil {
+		return Channels{
+			SyslogChannel:            make(chan []byte),
+			WriteBufferInputChannel:  make(chan map[string]string),
+			WriteBufferOutputChannel: make(chan map[string]string),
+		}
+	}
+
+	return Channels{
+		SyslogChannel:            make(chan []byte, *buffer),
+		WriteBufferInputChannel:  make(chan map[string]string, *buffer),
+		WriteBufferOutputChannel: make(chan map[string]string, *buffer),
 	}
 }

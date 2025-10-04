@@ -1,64 +1,92 @@
-// The buffer package contains the generic definition of an aged buffer
-// and the code needed to create, and use it.
+// This package provides a generic buffer implementation,
+// as well as methods, and functions to interact with it.
 package buffer
 
 import (
-	"errors"
-	"fmt"
+	"strings"
 	"time"
 )
 
-/*
-Creates a generic buffer with a max size and a max age,
-and then returns a pointer to it.
-*/
-func NewBuffer[T any](maxLength int, maxAge int) *Buffer[T] {
-	return &Buffer[T]{
-		MaxSize:     maxLength,
-		MaxAge:      maxAge,
-		CurrentSize: 0,
-		CurrentAge:  time.Now(),
-		Data:        make([]T, 0),
+type WriteModes string
+
+const (
+	// Write to file mode.
+	WMF WriteModes = "file"
+	// Write to database mode.
+	WMDB WriteModes = "db"
+	// Write to stream mode.
+	WMS WriteModes = "stream"
+)
+
+type WriteBuffer[T any] struct {
+	Data       []T
+	MaxSize    int
+	Size       int
+	MaxAge     int
+	CurrentAge time.Time
+	InChannel  chan T
+	OutChannel chan T
+	WriteMode  WriteModes
+}
+
+func NewWriteBuffer[T any](
+	maxSize int,
+	maxAge int,
+	inChannel chan T,
+	outChannel chan T,
+	writeMode WriteModes,
+) *WriteBuffer[T] {
+
+	return &WriteBuffer[T]{
+		Data:       make([]T, 0, maxSize),
+		MaxSize:    maxSize,
+		Size:       0,
+		MaxAge:     maxAge,
+		CurrentAge: time.Now(),
+		InChannel:  inChannel,
+		OutChannel: outChannel,
+		WriteMode:  writeMode,
 	}
 }
 
-/*
-Represents a buffer with data of type T,
-that has a max age, and a max length.
-*/
-type Buffer[T any] struct {
-	MaxSize     int
-	MaxAge      int
-	CurrentSize int
-	CurrentAge  time.Time
-	Data        []T
-}
-
-/*
-Adds a new item of type T to the referenced buffer.
-*/
-func (buff *Buffer[T]) AddItem(item T) error {
-	if buff.CurrentSize > buff.MaxSize-1 {
-		return errors.New("max buffer size exceeded")
+func (b *WriteBuffer[T]) Add(item T) {
+	if b.Size < b.MaxSize {
+		b.Data = append(b.Data, item)
+		b.Size++
 	}
-	buff.Data = append(buff.Data, item)
-	buff.CurrentSize++
-	return nil
 }
 
-/*
-Sets the data in the buffer referenced to be nil,
-and then allocates a fresh slice for new items
-to be added.
-*/
-func (buff *Buffer[T]) ClearBuffer() {
-	buff.Data = nil
-	buff.Data = make([]T, buff.MaxSize)
+func (b *WriteBuffer[T]) StreamReader() {
+	for message := range b.InChannel {
+		b.Add(message)
+	}
 }
 
-/*
-Prints a string representation of the referenced buffer's data.
-*/
-func (buff *Buffer[T]) PrintItems() {
-	fmt.Println("Data:", buff.Data)
+func (b *WriteBuffer[T]) writeHandler() {
+	// switch b.WriteMode {
+	// case WMF:
+	// b.WriteToFile()
+	// case WMDB:
+	// b.WriteToDB()
+	// case WMS:
+	// b.StreamWriter()
+	// }
+	if strings.Contains(string(b.WriteMode), "file") {
+	}
+	if strings.Contains(string(b.WriteMode), "db") {
+	}
+	if strings.Contains(string(b.WriteMode), "stream") {
+	}
 }
+
+func (b *WriteBuffer[T]) StreamWriter() {
+	for _, item := range b.Data {
+		b.OutChannel <- item
+	}
+}
+
+func (b *WriteBuffer[T]) MonitorAge() {}
+
+func (b *WriteBuffer[T]) WriteToFile() {}
+
+func (b *WriteBuffer[T]) WriteToDB() {}

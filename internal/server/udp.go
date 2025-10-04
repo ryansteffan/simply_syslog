@@ -14,7 +14,7 @@ type UDPSyslogServer struct {
 	Conf    config.Config
 	Logger  applogger.Logger
 	Addr    *net.UDPAddr
-	Channel chan ServerChannelMessage
+	Channel chan []byte
 	Parser  syslog.SyslogParser
 }
 
@@ -22,7 +22,7 @@ type UDPSyslogServer struct {
 func NewUDPServer(
 	conf config.Config,
 	logger applogger.Logger,
-	channel chan ServerChannelMessage,
+	channel chan []byte,
 	parser syslog.SyslogParser,
 ) (Server, error) {
 	address := conf.Data.Bind_Address + ":" + conf.Data.Udp_Port
@@ -65,15 +65,9 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 			u.Logger.Error("There was an error receiving a message to the server from address " + addr.String())
 		}
 
-		u.Logger.Debug("Message received ->" + string(messageBuff[:size]))
+		u.Logger.Debug("Message received: " + string(messageBuff[:size]))
 
-		format, err := u.Parser.DetectFormat(messageBuff[:size])
-		if err != nil {
-			u.Logger.Warn("There was an error detecting the format of the message from " + addr.String() + ": " + err.Error())
-		} else {
-			u.Logger.Info("Detected format: " + format.Name + " for message from " + addr.String())
-		}
-
+		u.Channel <- messageBuff[:size]
 	}
 }
 
