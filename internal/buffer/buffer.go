@@ -4,6 +4,7 @@ package buffer
 
 import (
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -56,7 +57,8 @@ func (b *WriteBuffer[T]) Add(item T) {
 	}
 }
 
-func (b *WriteBuffer[T]) StreamReader() {
+func (b *WriteBuffer[T]) StreamReader(wg *sync.WaitGroup) {
+	defer wg.Done()
 	for message := range b.InChannel {
 		b.Add(message)
 	}

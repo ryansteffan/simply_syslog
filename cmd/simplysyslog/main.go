@@ -6,13 +6,12 @@ import (
 	"os"
 	"sync"
 
+	"github.com/ryansteffan/simply_syslog/internal/buffer"
 	"github.com/ryansteffan/simply_syslog/internal/config"
 	"github.com/ryansteffan/simply_syslog/internal/server"
 	"github.com/ryansteffan/simply_syslog/internal/syslog"
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
-
-var serverWaitGroups sync.WaitGroup
 
 type Args struct {
 	UseEnv      bool
@@ -25,8 +24,16 @@ type Channels struct {
 	WriteBufferOutputChannel chan map[string]string
 }
 
+type Servers struct {
+	UDPServer server.Server
+	TCPServer server.Server
+}
+
+var serverWaitGroups sync.WaitGroup
+
 func main() {
 
+	// Parse command line arguments
 	args := ParseArgs()
 
 	logger, err := applogger.NewLogger("simply-syslog", applogger.DEBUG, applogger.CONSOLE)
@@ -34,65 +41,54 @@ func main() {
 		panic(err.Error())
 	}
 
-	var conf *config.Config
-
-	if !args.UseEnv {
-		conf, err = config.LoadConfig("./config/config.json")
-		if err != nil {
-			logger.Critical(err.Error())
-			os.Exit(1)
-		}
-	} else {
-		conf, err = config.LoadConfig("ENV")
-		if err != nil {
-			logger.Critical(err.Error())
-			os.Exit(1)
-		}
-	}
+	conf := LoadConfig(logger, args)
 
 	logger.Info("Loaded config from: " + conf.FileLocation)
-
 	logger.Debug("Config Data: " + fmt.Sprintf("%+v", conf))
 
-	syslogChannel := make(chan []byte)
+	// Create channels for communication between core components
+	channels := CreateChannels(nil)
+	logger.Debug("Created channels")
+	logger.Debug("Channels: " + fmt.Sprintf("%+v", channels))
 
-	var syslogParser *syslog.EvenDrivenSyslogParser
-	if !args.UseEnvRegex {
-		syslogParser, err = syslog.NewEvenDrivenSyslogParser("./config/regex.json")
-		if err != nil {
-			logger.Critical(err.Error())
-			os.Exit(1)
-		}
-	} else {
-		syslogParser, err = syslog.NewEvenDrivenSyslogParser("ENV")
-		if err != nil {
-			logger.Critical(err.Error())
-			os.Exit(1)
-		}
-	}
-
-	if err != nil {
-		logger.Critical(err.Error())
-		os.Exit(1)
-	}
+	syslogParser := CreateSyslogParser(logger, args)
+	logger.Info("Created syslog parser")
+	logger.Debug("Syslog Parser: " + fmt.Sprintf("%+v", syslogParser))
 
 	logger.Info(fmt.Sprintf(
 		"Loaded %d syslog formats from %s",
 		len(*syslogParser.Formats), "./config/regex.json",
 	))
 
-	udpServer, err := server.NewUDPServer(*conf, logger, syslogChannel, syslogParser)
+	writeBuffer := CreateWriteBuffer(conf, logger, channels)
+	logger.Info("Created write buffer")
+	logger.Debug("Write Buffer: " + fmt.Sprintf("%+v", writeBuffer))
 
-	if err != nil {
-		panic(err.Error())
+	servers := CreateServers(conf, logger, channels.SyslogChannel, syslogParser)
+	logger.Info("Created servers")
+	logger.Debug("Servers: " + fmt.Sprintf("%+v", servers))
+
+	// Start the write buffer
+	serverWaitGroups.Add(1)
+	go writeBuffer.StreamReader(&serverWaitGroups)
+	logger.Info("Started write buffer")
+
+	// Start the syslog handler
+	serverWaitGroups.Add(1)
+	go syslog.HandleSyslogMessages(syslogParser, channels.SyslogChannel, &serverWaitGroups)
+	logger.Info("Started syslog handler")
+
+	// Start the servers
+	if servers.UDPServer != nil {
+		serverWaitGroups.Add(1)
+		go servers.UDPServer.Start(&serverWaitGroups)
+		logger.Info("Started UDP server on " + conf.Data.Bind_Address + ":" + conf.Data.Udp_Port)
 	}
-
-	logger.Info("Starting UDP Server...")
-
-	serverWaitGroups.Add(1)
-	go syslog.HandleSyslogMessages(syslogParser, syslogChannel, &serverWaitGroups)
-	serverWaitGroups.Add(1)
-	go udpServer.Start(&serverWaitGroups)
+	if servers.TCPServer != nil {
+		serverWaitGroups.Add(1)
+		go servers.TCPServer.Start(&serverWaitGroups)
+		logger.Info("Started TCP server on " + conf.Data.Bind_Address + ":" + conf.Data.Tcp_Port)
+	}
 
 	// Stop the main function for exiting.
 	serverWaitGroups.Wait()
@@ -108,6 +104,87 @@ func ParseArgs() Args {
 		UseEnv:      *useEnvFlag,
 		UseEnvRegex: *useEnvRegexFlag,
 	}
+}
+
+func LoadConfig(logger applogger.Logger, args Args) *config.Config {
+	if !args.UseEnv {
+		conf, err := config.LoadConfig("./config/config.json")
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
+		return conf
+	}
+	conf, err := config.LoadConfig("ENV")
+	if err != nil {
+		logger.Critical(err.Error())
+		os.Exit(1)
+	}
+	return conf
+}
+
+func CreateSyslogParser(logger applogger.Logger, args Args) *syslog.EvenDrivenSyslogParser {
+	if !args.UseEnvRegex {
+		syslogParser, err := syslog.NewEvenDrivenSyslogParser("./config/regex.json")
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
+		return syslogParser
+	}
+	syslogParser, err := syslog.NewEvenDrivenSyslogParser("ENV")
+	if err != nil {
+		logger.Critical(err.Error())
+		os.Exit(1)
+	}
+	return syslogParser
+}
+
+func CreateServers(
+	conf *config.Config,
+	logger applogger.Logger,
+	syslogChannel chan []byte,
+	syslogParser *syslog.EvenDrivenSyslogParser,
+) Servers {
+	switch conf.Data.Protocol {
+	case "UDP":
+		server, err := server.NewUDPServer(*conf, logger, syslogChannel, syslogParser)
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
+		return Servers{
+			UDPServer: server,
+			TCPServer: nil,
+		}
+	case "TCP":
+		return Servers{
+			UDPServer: nil,
+			TCPServer: nil,
+		}
+	case "BOTH":
+		return Servers{
+			UDPServer: nil,
+			TCPServer: nil,
+		}
+	default:
+		logger.Critical("Unsupported protocol: " + conf.Data.Protocol)
+		os.Exit(1)
+		return Servers{
+			UDPServer: nil,
+			TCPServer: nil,
+		}
+	}
+}
+
+func CreateWriteBuffer(conf *config.Config, logger applogger.Logger, channels Channels) *buffer.WriteBuffer[map[string]string] {
+	return buffer.NewWriteBuffer(
+		conf.Data.Buffer_Length,
+		conf.Data.Buffer_Lifespan,
+		channels.WriteBufferInputChannel,
+		channels.WriteBufferOutputChannel,
+		buffer.WMF,
+	)
 }
 
 func CreateChannels(buffer *int) Channels {
