@@ -8,5 +8,7 @@
 	"buffer_lifespan": 5,
 	"max_message_size": 1024,
 	"syslog_path": "/var/log/simply_syslog",
-	"debug_messages": true
+	"debug_messages": true,
+	"do_file_write": true,
+	"do_db_write": true
 }

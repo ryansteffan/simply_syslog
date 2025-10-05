@@ -1,1 +1,1 @@
-docker build -t test-syslog:latest . && docker run -d test-syslog && echo "Complete! Press enter to continue..."; read;
+docker build -t test-syslog:latest . && docker run -d -p 514:514/tcp -p 514:514/udp test-syslog && echo "Complete! Press enter to continue..."; read;

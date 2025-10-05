@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  simply_syslog:
+    image: ryansteffan/simply_syslog:testing
+    container_name: simply_syslog
+    restart: always
+    build:
+      context: .
+    environment:
+      PROTOCOL: "UDP"
+      BIND_ADDRESS: "0.0.0.0"
+      UDP_PORT: "514"
+      TCP_PORT: "514"
+      MAX_TCP_CONNECTIONS: "10"
+      BUFFER_LENGTH: "32"
+      BUFFER_LIFESPAN: "5"
+      MAX_MESSAGE_SIZE: "1024"
+      SYSLOG_PATH: "/var/log/simply_syslog/"
+      DEBUG_MESSAGES: "True"
+      SYSLOG_FORMATS: '[{"Version":1,"Name":"RFC3164","Format":"^<(?<pri>\\d+)>(?<timestamp>\\w{3} +\\d{1,2} \\d{2}:\\d{2}:\\d{2}) (?<hostname>\\S+) (?<tag>\\S+?)(?:\\[(?<pid>\\d+)\\])?:? (?<message>.+)$"},{"Version":1,"Name":"RFC5424","Format":"^<(?<pri>\\d+)>(?<version>\\d+) (?<timestamp>[^ ]+) (?<hostname>\\S+) (?<appname>\\S+) (?<procid>\\S+) (?<msgid>\\S+) (?<structured_data>(?:\\[[^\\]]*\\]|-)) ?(?<message>.*)$"}]'
+    volumes:
+      - simply_syslog_data:/var/log/simply_syslog/
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
+
+volumes:
+  simply_syslog_data:
+    driver: local

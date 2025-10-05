@@ -69,7 +69,7 @@ func main() {
 
 	// Start the write buffer
 	serverWaitGroups.Add(1)
-	go writeBuffer.StreamReader(&serverWaitGroups)
+	go writeBuffer.StreamReader(logger, &serverWaitGroups)
 	logger.Info("Started write buffer")
 
 	// Start the syslog handler
@@ -202,6 +202,7 @@ func CreateWriteBuffer(conf *config.Config, logger applogger.Logger, channels Ch
 		channels.WriteBufferInputChannel,
 		channels.WriteBufferOutputChannel,
 		buffer.WMF,
+		logger,
 	)
 }
 
