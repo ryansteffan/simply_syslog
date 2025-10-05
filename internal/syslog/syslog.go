@@ -8,6 +8,8 @@ import (
 	"os"
 	"regexp"
 	"sync"
+
+	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
 type Format struct {
@@ -170,23 +172,28 @@ type SyslogParser interface {
 
 var _ SyslogParser = (*EvenDrivenSyslogParser)(nil)
 
-func HandleSyslogMessages(parser SyslogParser, messageChannel chan []byte, waitGroup *sync.WaitGroup) {
+func HandleSyslogMessages(
+	parser SyslogParser,
+	messageChannel chan []byte,
+	writeBufferInChannel chan map[string]string,
+	logger applogger.Logger,
+	waitGroup *sync.WaitGroup,
+) {
 	defer waitGroup.Done()
 
 	for message := range messageChannel {
 		format, err := parser.DetectFormat(message)
 		if err != nil {
-			println("No matching format found for message:", string(message))
+			logger.Warn("No matching format found for message: " + string(message))
 			continue
 		}
 
 		parsedMessage, err := parser.ParseMessage(message, format)
 		if err != nil {
-			println("Error parsing message:", err.Error())
+			logger.Warn("Error parsing message: " + err.Error())
+			continue
 		}
 
-		for k, v := range parsedMessage {
-			println("Parsed", k, ":", v)
-		}
+		writeBufferInChannel <- parsedMessage
 	}
 }

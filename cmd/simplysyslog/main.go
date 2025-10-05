@@ -16,6 +16,7 @@ import (
 type Args struct {
 	UseEnv      bool
 	UseEnvRegex bool
+	ShowDebug   bool
 }
 
 type Channels struct {
@@ -36,23 +37,21 @@ func main() {
 	// Parse command line arguments
 	args := ParseArgs()
 
-	logger, err := applogger.NewLogger("simply-syslog", applogger.DEBUG, applogger.CONSOLE)
-	if err != nil {
-		panic(err.Error())
-	}
+	conf := LoadConfig(args)
 
-	conf := LoadConfig(logger, args)
+	logger := CreateAppLogger(conf)
+	logger.Info("Initialized logger")
+	logger.Debug("Logger: " + fmt.Sprintf("%+v", logger))
 
-	logger.Info("Loaded config from: " + conf.FileLocation)
-	logger.Debug("Config Data: " + fmt.Sprintf("%+v", conf))
+	logger.Info("Loaded configuration from " + conf.FileLocation)
 
 	// Create channels for communication between core components
 	channels := CreateChannels(nil)
-	logger.Debug("Created channels")
+	logger.Debug("Initialized channels")
 	logger.Debug("Channels: " + fmt.Sprintf("%+v", channels))
 
 	syslogParser := CreateSyslogParser(logger, args)
-	logger.Info("Created syslog parser")
+	logger.Info("Initialized syslog parser")
 	logger.Debug("Syslog Parser: " + fmt.Sprintf("%+v", syslogParser))
 
 	logger.Info(fmt.Sprintf(
@@ -61,11 +60,11 @@ func main() {
 	))
 
 	writeBuffer := CreateWriteBuffer(conf, logger, channels)
-	logger.Info("Created write buffer")
+	logger.Info("Initialized write buffer")
 	logger.Debug("Write Buffer: " + fmt.Sprintf("%+v", writeBuffer))
 
 	servers := CreateServers(conf, logger, channels.SyslogChannel, syslogParser)
-	logger.Info("Created servers")
+	logger.Info("Initialized servers")
 	logger.Debug("Servers: " + fmt.Sprintf("%+v", servers))
 
 	// Start the write buffer
@@ -75,7 +74,13 @@ func main() {
 
 	// Start the syslog handler
 	serverWaitGroups.Add(1)
-	go syslog.HandleSyslogMessages(syslogParser, channels.SyslogChannel, &serverWaitGroups)
+	go syslog.HandleSyslogMessages(
+		syslogParser,
+		channels.SyslogChannel,
+		channels.WriteBufferInputChannel,
+		logger,
+		&serverWaitGroups,
+	)
 	logger.Info("Started syslog handler")
 
 	// Start the servers
@@ -106,19 +111,32 @@ func ParseArgs() Args {
 	}
 }
 
-func LoadConfig(logger applogger.Logger, args Args) *config.Config {
+func CreateAppLogger(conf *config.Config) applogger.Logger {
+	if conf.Data.Debug_Messages {
+		logger, err := applogger.NewLogger("simply-syslog", applogger.DEBUG, applogger.CONSOLE)
+		if err != nil {
+			panic(err.Error())
+		}
+		return logger
+	}
+	logger, err := applogger.NewLogger("simply-syslog", applogger.INFO, applogger.CONSOLE)
+	if err != nil {
+		panic(err.Error())
+	}
+	return logger
+}
+
+func LoadConfig(args Args) *config.Config {
 	if !args.UseEnv {
 		conf, err := config.LoadConfig("./config/config.json")
 		if err != nil {
-			logger.Critical(err.Error())
-			os.Exit(1)
+			panic(err.Error())
 		}
 		return conf
 	}
 	conf, err := config.LoadConfig("ENV")
 	if err != nil {
-		logger.Critical(err.Error())
-		os.Exit(1)
+		panic(err.Error())
 	}
 	return conf
 }
