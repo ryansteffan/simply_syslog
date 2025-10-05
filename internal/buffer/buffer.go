@@ -1,131 +1,199 @@
-// This package provides a generic buffer implementation,
-// as well as methods, and functions to interact with it.
 package buffer
 
 import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
-type WriteModes string
+type WriteMode byte
 
 const (
-	// Write to file mode.
-	WMF WriteModes = "file"
-	// Write to database mode.
-	WMDB WriteModes = "db"
-	// Write to stream mode.
-	WMS WriteModes = "stream"
+	WMF  WriteMode = 1
+	WMDB WriteMode = 2
+	WMS  WriteMode = 4
 )
 
-type WriteBuffer[T any] struct {
-	Data       []T
-	MaxSize    int
-	Size       int
-	MaxAge     int
-	CurrentAge time.Time
-	InChannel  chan T
-	OutChannel chan T
-	logger     applogger.Logger
-	WriteMode  WriteModes
+type ParsedSyslogData struct {
+	RawMessage    []byte
+	ParsedMessage map[string]string
 }
 
-func NewWriteBuffer[T any](
-	maxSize int,
-	maxAge int,
-	inChannel chan T,
-	outChannel chan T,
-	writeMode WriteModes,
-	logger applogger.Logger,
-) *WriteBuffer[T] {
+type Buffer interface {
+	Add(item ParsedSyslogData) error
+	Flush() error
+	StreamReader(wg *sync.WaitGroup)
+	StreamWriter()
+	WriteHandler() error
+	MonitorAge(wg *sync.WaitGroup)
+}
 
-	return &WriteBuffer[T]{
-		Data:       make([]T, 0, maxSize),
-		MaxSize:    maxSize,
-		Size:       0,
-		MaxAge:     maxAge,
+type SyslogWriteBuffer struct {
+	Data       []ParsedSyslogData
+	MaxLen     int
+	MaxAge     time.Time
+	CurrentLen int
+	CurrentAge time.Time
+	InChannel  chan ParsedSyslogData
+	OutChannel chan ParsedSyslogData
+	Mode       WriteMode
+	FilePath   *string
+	Logger     applogger.Logger
+}
+
+func NewSyslogWriteBuffer(
+	maxLen int,
+	maxAge int,
+	inChannel chan ParsedSyslogData,
+	outChannel chan ParsedSyslogData,
+	mode WriteMode,
+	filePath *string,
+	logger applogger.Logger,
+) *SyslogWriteBuffer {
+	return &SyslogWriteBuffer{
+		Data:       make([]ParsedSyslogData, 0, maxLen),
+		MaxLen:     maxLen,
+		CurrentLen: 0,
+		MaxAge:     time.Now().Add(time.Duration(maxAge) * time.Second),
 		CurrentAge: time.Now(),
 		InChannel:  inChannel,
 		OutChannel: outChannel,
-		WriteMode:  writeMode,
-		logger:     logger,
+		Mode:       mode,
+		FilePath:   filePath,
+		Logger:     logger,
 	}
 }
 
-func (b *WriteBuffer[T]) Add(item T) error {
-	if b.Size < b.MaxSize {
-		b.Data = append(b.Data, item)
-		b.Size++
+// Add implements Buffer.
+func (s *SyslogWriteBuffer) Add(item ParsedSyslogData) error {
+	s.Logger.Debug("Adding item to buffer")
+	if s.CurrentLen < s.MaxLen {
+		s.Data = append(s.Data, item)
+		s.CurrentLen++
+		s.Logger.Debug("Item added. CurrentLen: " + fmt.Sprint(s.CurrentLen))
+		return nil
+	} else {
+		s.Logger.Info("Buffer full, triggering WriteHandler")
+		s.WriteHandler()
+		s.Data = append(s.Data, item)
+		s.CurrentLen++
+		s.Logger.Debug("Item added after flush. CurrentLen: " + fmt.Sprint(s.CurrentLen))
 		return nil
 	}
-	return errors.New("buffer overflow: max size reached")
 }
 
-func (b *WriteBuffer[T]) StreamReader(logger applogger.Logger, wg *sync.WaitGroup) {
+// Flush implements Buffer.
+func (s *SyslogWriteBuffer) Flush() error {
+	s.Logger.Info("Flushing buffer")
+	s.Data = make([]ParsedSyslogData, 0, s.MaxLen)
+	s.CurrentLen = 0
+	s.MaxAge = time.Now().Add(time.Until(s.MaxAge))
+	s.CurrentAge = time.Now()
+	s.Logger.Debug("Buffer flushed. CurrentLen reset to 0.")
+	return nil
+}
+
+// WriteHandler implements Buffer.
+func (s *SyslogWriteBuffer) WriteHandler() error {
+	s.Logger.Info("WriteHandler triggered. Mode: " + fmt.Sprint(s.Mode))
+	switch s.Mode {
+	case WMF:
+		s.Logger.Debug("Calling FileWriter")
+		s.FileWriter()
+	case WMDB:
+		s.Logger.Debug("Calling DatabaseWriter")
+		s.DatabaseWriter()
+	case WMS:
+		s.Logger.Debug("Calling StreamWriter")
+		s.StreamWriter()
+	case WMF + WMS:
+		s.Logger.Debug("Calling FileWriter and StreamWriter")
+		s.FileWriter()
+		s.StreamWriter()
+	case WMDB + WMS:
+		s.Logger.Debug("Calling DatabaseWriter and StreamWriter")
+		s.DatabaseWriter()
+		s.StreamWriter()
+	case WMF + WMDB:
+		s.Logger.Debug("Calling FileWriter and DatabaseWriter")
+		s.FileWriter()
+		s.DatabaseWriter()
+	case WMF + WMDB + WMS:
+		s.Logger.Debug("Calling FileWriter, DatabaseWriter, and StreamWriter")
+		s.FileWriter()
+		s.DatabaseWriter()
+		s.StreamWriter()
+	default:
+		s.Logger.Error("Invalid write mode")
+		return errors.New("invalid write mode")
+	}
+	s.Flush()
+	s.Logger.Info("WriteHandler completed and buffer flushed.")
+	return nil
+}
+
+// MonitorAge implements Buffer.
+func (s *SyslogWriteBuffer) MonitorAge(wg *sync.WaitGroup) {
 	defer wg.Done()
-	for message := range b.InChannel {
-		if b.Size < b.MaxSize {
-			b.Add(message)
-		} else {
-			logger.Info("Buffer full, writing to output...")
-			b.writeHandler()
-			b.Add(message)
+
+	ticker := time.NewTicker(time.Until(s.MaxAge))
+	defer ticker.Stop()
+	for {
+		<-ticker.C
+		if time.Since(s.CurrentAge) >= time.Until(s.MaxAge) && s.CurrentLen > 0 {
+			s.Logger.Info("MaxAge reached, triggering WriteHandler")
+			s.WriteHandler()
 		}
 	}
 }
 
-func (b *WriteBuffer[T]) Flush() {
-	b.Data = make([]T, 0, b.MaxSize)
-	b.Size = 0
-}
+// StreamReader implements Buffer.
+func (s *SyslogWriteBuffer) StreamReader(wg *sync.WaitGroup) {
+	defer wg.Done()
 
-func (b *WriteBuffer[T]) writeHandler() {
-	if strings.Contains(string(b.WriteMode), "file") {
-		b.WriteToFile()
-	}
-	if strings.Contains(string(b.WriteMode), "db") {
-		b.WriteToDB()
-	}
-	if strings.Contains(string(b.WriteMode), "stream") {
-		b.StreamWriter()
-	}
-	b.Flush()
-}
-
-func (b *WriteBuffer[T]) StreamWriter() {
-	for _, item := range b.Data {
-		b.OutChannel <- item
+	for item := range s.InChannel {
+		s.Add(item)
 	}
 }
 
-func (b *WriteBuffer[T]) MonitorAge() {}
+// StreamWriter implements Buffer.
+func (s *SyslogWriteBuffer) StreamWriter() {
+	for _, item := range s.Data {
+		s.OutChannel <- item
+	}
+}
 
-func (b *WriteBuffer[T]) WriteToFile() {
-	file, err := os.OpenFile("/var/log/syslog.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	b.logger.Debug("Opened file for writing...")
+func (s *SyslogWriteBuffer) FileWriter() error {
+	if s.FilePath == nil {
+		return errors.New("file path is nil")
+	}
+
+	file, err := os.OpenFile(*s.FilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		b.logger.Error("Error opening file: " + err.Error())
-		return
+		return err
 	}
 
 	defer file.Close()
 
-	for _, item := range b.Data {
-		_, err := file.WriteString(fmt.Sprintf("%v\n", item))
-		if err != nil {
-			b.logger.Error("Error writing to file: " + err.Error())
-		}
+	var lines []byte
+	for _, item := range s.Data {
+		line := append(lines, item.RawMessage...)
+		line = append(line, '\n')
+		lines = line
 	}
+	_, err = file.Write(lines)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (b *WriteBuffer[T]) WriteToDB() {
-	for _, item := range b.Data {
-		b.logger.Debug("Writing to database: " + fmt.Sprintf("%v", item))
-	}
+func (s *SyslogWriteBuffer) DatabaseWriter() error {
+	panic("unimplemented")
 }
+
+var _ Buffer = (*SyslogWriteBuffer)(nil)

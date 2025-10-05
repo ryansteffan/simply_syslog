@@ -62,12 +62,22 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 		size, addr, err := server.ReadFromUDP(messageBuff)
 
 		if err != nil {
-			u.Logger.Error("There was an error receiving a message to the server from address " + addr.String())
+			// addr may be nil on error; avoid nil deref
+			if addr != nil {
+				u.Logger.Error("There was an error receiving a message to the server from address " + addr.String())
+			} else {
+				u.Logger.Error("There was an error receiving a message to the server (addr unavailable): " + err.Error())
+			}
+			continue
 		}
 
-		u.Logger.Debug("Message received: " + string(messageBuff[:size]))
+		// Copy the bytes before sending to channel to avoid reuse of the underlying buffer
+		msg := make([]byte, size)
+		copy(msg, messageBuff[:size])
 
-		u.Channel <- messageBuff[:size]
+		u.Logger.Debug("Message received: " + string(msg))
+
+		u.Channel <- msg
 	}
 }
 

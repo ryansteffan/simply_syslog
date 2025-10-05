@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/ryansteffan/simply_syslog/internal/buffer"
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
@@ -34,12 +35,13 @@ func (d *EvenDrivenSyslogParser) DetectFormat(message []byte) (*CompiledFormat, 
 	if d.CompiledFormats == nil {
 		return nil, errors.New("no compiled formats available to detect")
 	}
-	for _, compiledFormat := range *d.CompiledFormats {
+	for index := range *d.CompiledFormats {
+		compiledFormat := &(*d.CompiledFormats)[index]
 		// Require the message to match the entire format regex exactly
 		if compiledFormat.Format.Match(message) {
 			matched := compiledFormat.Format.Find(message)
 			if matched != nil && string(matched) == string(message) {
-				return &compiledFormat, nil
+				return compiledFormat, nil
 			}
 		}
 	}
@@ -175,7 +177,7 @@ var _ SyslogParser = (*EvenDrivenSyslogParser)(nil)
 func HandleSyslogMessages(
 	parser SyslogParser,
 	messageChannel chan []byte,
-	writeBufferInChannel chan map[string]string,
+	writeBufferInChannel chan buffer.ParsedSyslogData,
 	logger applogger.Logger,
 	waitGroup *sync.WaitGroup,
 ) {
@@ -194,6 +196,9 @@ func HandleSyslogMessages(
 			continue
 		}
 
-		writeBufferInChannel <- parsedMessage
+		writeBufferInChannel <- buffer.ParsedSyslogData{
+			RawMessage:    message,
+			ParsedMessage: parsedMessage,
+		}
 	}
 }

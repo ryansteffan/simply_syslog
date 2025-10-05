@@ -21,8 +21,8 @@ type Args struct {
 
 type Channels struct {
 	SyslogChannel            chan []byte
-	WriteBufferInputChannel  chan map[string]string
-	WriteBufferOutputChannel chan map[string]string
+	WriteBufferInputChannel  chan buffer.ParsedSyslogData
+	WriteBufferOutputChannel chan buffer.ParsedSyslogData
 }
 
 type Servers struct {
@@ -62,15 +62,17 @@ func main() {
 	writeBuffer := CreateWriteBuffer(conf, logger, channels)
 	logger.Info("Initialized write buffer")
 	logger.Debug("Write Buffer: " + fmt.Sprintf("%+v", writeBuffer))
-
 	servers := CreateServers(conf, logger, channels.SyslogChannel, syslogParser)
 	logger.Info("Initialized servers")
 	logger.Debug("Servers: " + fmt.Sprintf("%+v", servers))
 
 	// Start the write buffer
 	serverWaitGroups.Add(1)
-	go writeBuffer.StreamReader(logger, &serverWaitGroups)
+	go writeBuffer.StreamReader(&serverWaitGroups)
 	logger.Info("Started write buffer")
+
+	go writeBuffer.MonitorAge(&serverWaitGroups)
+	logger.Info("Started write buffer age monitor")
 
 	// Start the syslog handler
 	serverWaitGroups.Add(1)
@@ -195,29 +197,34 @@ func CreateServers(
 	}
 }
 
-func CreateWriteBuffer(conf *config.Config, logger applogger.Logger, channels Channels) *buffer.WriteBuffer[map[string]string] {
-	return buffer.NewWriteBuffer(
+func CreateWriteBuffer(
+	conf *config.Config,
+	logger applogger.Logger,
+	channels Channels,
+) *buffer.SyslogWriteBuffer {
+	return buffer.NewSyslogWriteBuffer(
 		conf.Data.Buffer_Length,
 		conf.Data.Buffer_Lifespan,
 		channels.WriteBufferInputChannel,
 		channels.WriteBufferOutputChannel,
 		buffer.WMF,
+		&conf.Data.Syslog_Path,
 		logger,
 	)
 }
 
-func CreateChannels(buffer *int) Channels {
-	if buffer == nil {
+func CreateChannels(bufferLen *int) Channels {
+	if bufferLen == nil {
 		return Channels{
 			SyslogChannel:            make(chan []byte),
-			WriteBufferInputChannel:  make(chan map[string]string),
-			WriteBufferOutputChannel: make(chan map[string]string),
+			WriteBufferInputChannel:  make(chan buffer.ParsedSyslogData),
+			WriteBufferOutputChannel: make(chan buffer.ParsedSyslogData),
 		}
 	}
 
 	return Channels{
-		SyslogChannel:            make(chan []byte, *buffer),
-		WriteBufferInputChannel:  make(chan map[string]string, *buffer),
-		WriteBufferOutputChannel: make(chan map[string]string, *buffer),
+		SyslogChannel:            make(chan []byte, *bufferLen),
+		WriteBufferInputChannel:  make(chan buffer.ParsedSyslogData, *bufferLen),
+		WriteBufferOutputChannel: make(chan buffer.ParsedSyslogData, *bufferLen),
 	}
 }
