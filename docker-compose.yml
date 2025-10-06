@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   simply_syslog:
-    image: ryansteffan/simply_syslog:testing
+    image: ryansteffan/simply_syslog:0.8.0-alpha.1
     container_name: simply_syslog
     restart: always
     build:

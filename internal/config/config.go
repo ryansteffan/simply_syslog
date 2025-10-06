@@ -106,7 +106,7 @@ func LoadConfig(path string) (*Config, error) {
 		var config Config
 		err = json.Unmarshal(configFile, &config.Data)
 		if err != nil {
-			return nil, errors.New("error parsing config file into struct")
+			return nil, err
 		}
 
 		config.FileLocation = path

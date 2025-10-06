@@ -7,7 +7,7 @@
 	"buffer_length": 32,
 	"buffer_lifespan": 5,
 	"max_message_size": 1024,
-	"syslog_path": "/Users/Public/syslog.log",
+	"syslog_path": "/var/log/syslog.log",
 	"debug_messages": false,
 	"do_file_write": true,
 	"do_db_write": true

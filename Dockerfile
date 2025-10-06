@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
 
 FROM scratch AS runner
 
-# # Sets the enviroment variables used for configuration of the server.
+# # Sets the environment variables used for configuration of the server.
 ENV PROTOCOL="UDP"
 ENV BIND_ADDRESS="0.0.0.0"
 ENV UDP_PORT="514"
