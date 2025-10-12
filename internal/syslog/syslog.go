@@ -28,6 +28,7 @@ type EvenDrivenSyslogParser struct {
 	Formats         *[]Format
 	CompiledFormats *[]CompiledFormat
 	MessageChannel  chan []byte
+	Logger          applogger.Logger
 }
 
 // DetectFormat implements SyslogParser.
@@ -37,23 +38,30 @@ func (d *EvenDrivenSyslogParser) DetectFormat(message []byte) (*CompiledFormat, 
 	}
 	for index := range *d.CompiledFormats {
 		compiledFormat := &(*d.CompiledFormats)[index]
-		// Require the message to match the entire format regex exactly
-		if compiledFormat.Format.Match(message) {
-			matched := compiledFormat.Format.Find(message)
-			if matched != nil && string(matched) == string(message) {
-				return compiledFormat, nil
-			}
+		matched := compiledFormat.Format.Find(message)
+		if matched != nil && string(matched) == string(message) {
+			return compiledFormat, nil
+		} else {
+			d.Logger.Debug(
+				"Non exact match for format: " +
+					compiledFormat.Name +
+					" on message: " +
+					string(message) +
+					" matched: " +
+					string(matched),
+			)
 		}
 	}
 	return nil, errors.New("no matching format found")
 }
 
-func NewEvenDrivenSyslogParser(path string) (*EvenDrivenSyslogParser, error) {
+func NewEvenDrivenSyslogParser(path string, logger applogger.Logger) (*EvenDrivenSyslogParser, error) {
 
 	parser := &EvenDrivenSyslogParser{
 		Formats:         nil,
 		CompiledFormats: nil,
 		MessageChannel:  make(chan []byte),
+		Logger:          logger,
 	}
 
 	switch path {

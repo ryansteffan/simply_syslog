@@ -145,14 +145,14 @@ func LoadConfig(args Args) *config.Config {
 
 func CreateSyslogParser(logger applogger.Logger, args Args) *syslog.EvenDrivenSyslogParser {
 	if !args.UseEnvRegex {
-		syslogParser, err := syslog.NewEvenDrivenSyslogParser("./config/regex.json")
+		syslogParser, err := syslog.NewEvenDrivenSyslogParser("./config/regex.json", logger)
 		if err != nil {
 			logger.Critical(err.Error())
 			os.Exit(1)
 		}
 		return syslogParser
 	}
-	syslogParser, err := syslog.NewEvenDrivenSyslogParser("ENV")
+	syslogParser, err := syslog.NewEvenDrivenSyslogParser("ENV", logger)
 	if err != nil {
 		logger.Critical(err.Error())
 		os.Exit(1)
