@@ -51,7 +51,6 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 	if err != nil {
 		return errors.New("there was an error starting the udp server")
 	}
-	u.Logger.Info("Started the UDP server!")
 
 	defer server.Close()
 

@@ -1,5 +1,5 @@
 {
-	"protocol": "UDP",
+	"protocol": "BOTH",
 	"bind_address": "0.0.0.0",
 	"udp_port": "514",
 	"tcp_port": "514",

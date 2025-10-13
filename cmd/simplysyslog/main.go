@@ -178,14 +178,29 @@ func CreateServers(
 			TCPServer: nil,
 		}
 	case "TCP":
+		server, err := server.NewTCPServer(*conf, logger, syslogChannel, syslogParser)
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
 		return Servers{
 			UDPServer: nil,
-			TCPServer: nil,
+			TCPServer: server,
 		}
 	case "BOTH":
+		udpServer, err := server.NewUDPServer(*conf, logger, syslogChannel, syslogParser)
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
+		tcpServer, err := server.NewTCPServer(*conf, logger, syslogChannel, syslogParser)
+		if err != nil {
+			logger.Critical(err.Error())
+			os.Exit(1)
+		}
 		return Servers{
-			UDPServer: nil,
-			TCPServer: nil,
+			UDPServer: udpServer,
+			TCPServer: tcpServer,
 		}
 	default:
 		logger.Critical("Unsupported protocol: " + conf.Data.Protocol)
