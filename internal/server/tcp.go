@@ -25,7 +25,7 @@ func NewTCPServer(
 	channel chan []byte,
 	parser syslog.SyslogParser,
 ) (Server, error) {
-	address := conf.Data.Bind_Address + ":" + conf.Data.Udp_Port
+	address := conf.Data.Bind_Address + ":" + conf.Data.Tcp_Port
 	addr, err := net.ResolveTCPAddr("tcp", address)
 
 	logger.Info("Created TCP server on " + address)
