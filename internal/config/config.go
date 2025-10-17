@@ -31,6 +31,8 @@ type ConfigData struct {
 	Max_Message_Size    int    `json:"max_message_size"`
 	Syslog_Path         string `json:"syslog_path"`
 	Debug_Messages      bool   `json:"debug_messages"`
+	Do_File_Writes      bool   `json:"do_file_writes"`
+	Do_Stdout_Writes    bool   `json:"do_stdout_writes"`
 }
 
 /*
@@ -86,6 +88,16 @@ func LoadConfig(path string) (*Config, error) {
 
 				Debug_Messages: utils.InlineBoolParse(
 					utils.DefaultStringValue(os.Getenv("DEBUG_MESSAGES"), "True"),
+					envTypeError,
+				),
+
+				Do_File_Writes: utils.InlineBoolParse(
+					utils.DefaultStringValue(os.Getenv("DO_FILE_WRITES"), "True"),
+					envTypeError,
+				),
+
+				Do_Stdout_Writes: utils.InlineBoolParse(
+					utils.DefaultStringValue(os.Getenv("DO_STDOUT_WRITES"), "True"),
 					envTypeError,
 				),
 			},
