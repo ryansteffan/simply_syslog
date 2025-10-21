@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
@@ -11,11 +12,12 @@ import (
 )
 
 type UDPSyslogServer struct {
-	Conf    config.Config
-	Logger  applogger.Logger
-	Addr    *net.UDPAddr
-	Channel chan []byte
-	Parser  syslog.SyslogParser
+	Conf          config.Config
+	Logger        applogger.Logger
+	Addr          *net.UDPAddr
+	Channel       chan []byte
+	Parser        syslog.SyslogParser
+	CancelContext context.Context
 }
 
 // NewServer implements Server.

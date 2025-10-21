@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/internal/buffer"
@@ -23,6 +25,7 @@ type Channels struct {
 	SyslogChannel            chan []byte
 	WriteBufferInputChannel  chan buffer.ParsedSyslogData
 	WriteBufferOutputChannel chan buffer.ParsedSyslogData
+	OSSignalChannel          chan os.Signal
 }
 
 type Servers struct {
@@ -31,6 +34,7 @@ type Servers struct {
 }
 
 var serverWaitGroups sync.WaitGroup
+var shutdownContext, shutdownCancel = context.WithCancel(context.Background())
 
 func main() {
 
@@ -49,6 +53,9 @@ func main() {
 	channels := CreateChannels(nil)
 	logger.Debug("Initialized channels")
 	logger.Debug("Channels: " + fmt.Sprintf("%+v", channels))
+
+	// Register to receive OS signals
+	signal.Notify(channels.OSSignalChannel)
 
 	syslogParser := CreateSyslogParser(logger, args)
 	logger.Info("Initialized syslog parser")
@@ -96,6 +103,25 @@ func main() {
 		go servers.TCPServer.Start(&serverWaitGroups)
 		logger.Info("Started TCP server on " + conf.Data.Bind_Address + ":" + conf.Data.Tcp_Port)
 	}
+
+	serverWaitGroups.Add(1)
+	go func() {
+		defer serverWaitGroups.Done()
+		signal := <-channels.OSSignalChannel
+		switch signal {
+		case os.Interrupt:
+			logger.Info("Received interrupt signal, shutting down...")
+			shutdownCancel()
+			os.Exit(0)
+		case os.Kill:
+			logger.Info("Received kill signal, shutting down...")
+			shutdownCancel()
+			os.Exit(0)
+		default:
+			logger.Info("Received unknown signal: " + signal.String())
+			os.Exit(100)
+		}
+	}()
 
 	// Stop the main function for exiting.
 	serverWaitGroups.Wait()
@@ -234,6 +260,7 @@ func CreateChannels(bufferLen *int) Channels {
 			SyslogChannel:            make(chan []byte),
 			WriteBufferInputChannel:  make(chan buffer.ParsedSyslogData),
 			WriteBufferOutputChannel: make(chan buffer.ParsedSyslogData),
+			OSSignalChannel:          make(chan os.Signal, 1),
 		}
 	}
 
@@ -241,5 +268,6 @@ func CreateChannels(bufferLen *int) Channels {
 		SyslogChannel:            make(chan []byte, *bufferLen),
 		WriteBufferInputChannel:  make(chan buffer.ParsedSyslogData, *bufferLen),
 		WriteBufferOutputChannel: make(chan buffer.ParsedSyslogData, *bufferLen),
+		OSSignalChannel:          make(chan os.Signal, 1),
 	}
 }
