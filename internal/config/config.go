@@ -15,6 +15,10 @@ type Config struct {
 	Data         ConfigData
 }
 
+type Test struct {
+	Name string `json:"name"`
+}
+
 /*
 Represents the JSON config file for the server.
 

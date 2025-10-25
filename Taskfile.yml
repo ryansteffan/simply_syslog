@@ -1,0 +1,104 @@
+# https://taskfile.dev
+
+version: '3'
+
+env:
+  APP_NAME: simply-syslog
+  VERSION: 0.8.0-alpha.4
+  CMD_PATH: ./cmd/simplysyslog/main.go
+  BUILD_DIR: ./build
+
+tasks:
+  run:
+    desc: Run the application using the go run command and the config.json.
+    cmds:
+      - echo Running the application...
+      - go run $CMD_PATH
+    silent: true
+
+  watch:
+    desc: Runs the application with the config.json and restarts on code and config changes.
+    cmds:
+       - |
+        if ! command -v air &> /dev/null; then \
+          echo "air could not be found, please install it first"; \
+          exit 1; \
+        else \
+        air -build.cmd="go build -o $BUILD_DIR/$APP_NAME-watch -v $CMD_PATH" -build.bin="$BUILD_DIR/$APP_NAME-watch"; \
+        fi
+       - echo "Doing cleanup..."
+       - defer: "rm $BUILD_DIR/$APP_NAME-watch"
+    silent: true
+
+  build:
+    desc: Build the application for the current OS and architecture.
+    cmds:
+      - |
+        os="{{.GOOS | default "linux"}}"
+        arch="{{.GOARCH | default "amd64"}}"
+        full_ver="{{.VERSION | default "development"}}"
+        go build -o build/$APP_NAME-{{.GOOS}}-{{.GOARCH}}-v$full_ver $CMD_PATH
+        echo "Build completed -> $BUILD_DIR/$APP_NAME-$GOOS-$GOARCH-v$VERSION"
+
+  # Bellow are builds tasks for each OS (amd64, and arm64).
+
+  build-linux-amd64:
+    desc: Build the application for Linux AMD64.
+    cmds:
+      - task: build
+        vars:
+          GOOS: linux
+          GOARCH: amd64
+
+  build-linux-arm64:
+    desc: Build the application for Linux ARM64.
+    cmds:
+      - task: build
+        vars:
+          GOOS: linux
+          GOARCH: arm64
+
+  build-windows-amd64:
+    desc: Build the application for Windows AMD64.
+    cmds:
+      - task: build
+        vars:
+          GOOS: windows
+          GOARCH: amd64
+          VERSION: $VERSION.exe
+          
+
+  build-windows-arm64:
+    desc: Build the application for Windows ARM64.
+    cmds:
+      - task: build
+        vars:
+          GOOS: windows
+          GOARCH: arm64
+          VERSION: $VERSION.exe
+
+  build-macos-amd64:
+    desc: Build the application for macOS AMD64.
+    cmds:
+      - task: build
+        vars:
+          GOOS: darwin
+          GOARCH: amd64
+
+  build-macos-arm64:
+    desc: Build the application for macOS ARM64.
+    cmds:
+      - task: build
+        vars:
+          GOOS: darwin
+          GOARCH: arm64
+
+  build-all:
+    desc: Build the application for all supported OS and architecture combinations.
+    deps:
+      - build-linux-amd64
+      - build-linux-arm64
+      - build-windows-amd64
+      - build-windows-arm64
+      - build-macos-amd64
+      - build-macos-arm64

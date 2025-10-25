@@ -1,2 +1,4 @@
 /build
 /cmd/testing
+.task/
+/tmp/
