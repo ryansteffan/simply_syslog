@@ -5,6 +5,8 @@ A dead simple open source syslog server written in Go.
 The server is intended to be used with docker to provide a syslog server
 that is easy to configure, deploy, and scale.
 
+> **Note:** This project is currently in active development on the `go-migration` branch. The project was originally written in Python and is being rewritten in Go for better performance and maintainability. The Go version is functional but still in alpha. See [NEXT_STEPS.md](NEXT_STEPS.md) for development roadmap.
+
 <!-- TOC -->
 - [simply\_syslog](#simply_syslog)
   - [Features:](#features)
@@ -18,25 +20,28 @@ that is easy to configure, deploy, and scale.
     - [Deploying the image](#deploying-the-image)
   - [Config settings guide:](#config-settings-guide)
     - [Some setting details:](#some-setting-details)
+  - [Development and Contributing:](#development-and-contributing)
   - [Reporting Vulnerabilities:](#reporting-vulnerabilities)
 <!-- TOC -->
 
 
 ## Features:
 
-- UDP syslog support
+- UDP and TCP syslog support
 - Docker-first deployment and configuration
 - Highly configurable via environment variables or config file
 - Efficient message buffering and file logging
 - Designed for high-throughput and reliability
+- Support for RFC3164, RFC5424, and raw syslog formats
 
 
 ## Upcoming features:
 
-- TCP syslog support (in progress)
-- Graceful shutdown and restart (in progress)
+- Comprehensive unit tests (high priority)
+- Improved graceful shutdown (in progress)
 - Database logging (planned)
-- Support for encryption (planned)
+- TLS/encryption support for TCP (planned)
+- Performance benchmarking and optimization (planned)
 
 
 # How to Use:
@@ -151,6 +156,31 @@ This is a quick reference guide to the configurations:
   before a disk write is done, this leads to the trade-off of having a longer disk write that needs to be done later.
   I would recommend not set values any higher than 256, unless there are lots of machines on the network, or you have
   a use case that demands it.
+
+## Development and Contributing:
+
+We welcome contributions! This project is actively being developed and there are many opportunities to contribute.
+
+**📋 See [NEXT_STEPS.md](NEXT_STEPS.md)** for a detailed list of prioritized tasks and features that need work.
+
+**👥 See [CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines on how to contribute, set up your development environment, and submit pull requests.
+
+### Quick Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/ryansteffan/simply_syslog.git
+cd simply_syslog
+
+# Build the application
+go build -o build/simply-syslog ./cmd/simplysyslog/main.go
+
+# Run the application
+./build/simply-syslog
+
+# Or use Task (if installed)
+task run
+```
 
 ## Reporting Vulnerabilities:
 
