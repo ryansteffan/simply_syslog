@@ -12,12 +12,15 @@ import (
 )
 
 type UDPSyslogServer struct {
-	Conf          config.Config
-	Logger        applogger.Logger
-	Addr          *net.UDPAddr
-	Channel       chan []byte
-	Parser        syslog.SyslogParser
-	CancelContext context.Context
+	Conf       config.Config
+	Logger     applogger.Logger
+	Addr       *net.UDPAddr
+	Channel    chan []byte
+	Parser     syslog.SyslogParser
+	cancleFunc func()
+	cancleCtx  context.Context
+	stoppped   bool
+	mutex      sync.Mutex
 }
 
 // NewServer implements Server.
@@ -36,18 +39,26 @@ func NewUDPServer(
 		return nil, errors.New("there was an error resolving the udp server address")
 	}
 
+	context, cancleFunc := context.WithCancel(context.Background())
+
 	return &UDPSyslogServer{
-		Conf:    conf,
-		Logger:  logger,
-		Addr:    addr,
-		Channel: channel,
-		Parser:  parser,
+		Conf:       conf,
+		Logger:     logger,
+		Addr:       addr,
+		Channel:    channel,
+		Parser:     parser,
+		cancleFunc: cancleFunc,
+		cancleCtx:  context,
 	}, nil
 }
 
 // start implements Server.
 func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
+
+	u.mutex.Lock()
+	u.stoppped = false
+	u.mutex.Unlock()
 
 	server, err := net.ListenUDP("udp", u.Addr)
 	if err != nil {
@@ -78,13 +89,31 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 
 		u.Logger.Debug("Message received: " + string(msg))
 
-		u.Channel <- msg
+		select {
+		case <-u.cancleCtx.Done():
+			u.Logger.Info("UDP server is stopping, exiting message receive loop")
+			return nil
+		case u.Channel <- msg:
+			u.Logger.Info("Message sent to processing channel from " + addr.String())
+		default:
+			u.Logger.Warn("Processing channel is full, dropping message from " + addr.String())
+		}
 	}
 }
 
 // stop implements Server.
 func (u *UDPSyslogServer) Stop() error {
-	panic("unimplemented")
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
+
+	u.Logger.Info("Stopping UDP Server...")
+
+	if u.stoppped {
+		return errors.New("server is already stopped")
+	}
+	u.cancleFunc()
+	u.stoppped = true
+	return nil
 }
 
 // restart implements Server.

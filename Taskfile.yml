@@ -37,8 +37,8 @@ tasks:
         os="{{.GOOS | default "linux"}}"
         arch="{{.GOARCH | default "amd64"}}"
         full_ver="{{.VERSION | default "development"}}"
-        go build -o build/$APP_NAME-{{.GOOS}}-{{.GOARCH}}-v$full_ver $CMD_PATH
-        echo "Build completed -> $BUILD_DIR/$APP_NAME-$GOOS-$GOARCH-v$VERSION"
+        GOOS=$os GOARCH=$arch go build -o build/$APP_NAME-$os-$arch-v$full_ver $CMD_PATH
+        echo "Build completed -> $BUILD_DIR/$APP_NAME-$os-$arch-v$full_ver"
 
   # Bellow are builds tasks for each OS (amd64, and arm64).
 

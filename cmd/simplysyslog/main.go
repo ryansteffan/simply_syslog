@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/internal/buffer"
@@ -34,7 +34,6 @@ type Servers struct {
 }
 
 var serverWaitGroups sync.WaitGroup
-var shutdownContext, shutdownCancel = context.WithCancel(context.Background())
 
 func main() {
 
@@ -104,24 +103,27 @@ func main() {
 		logger.Info("Started TCP server on " + conf.Data.Bind_Address + ":" + conf.Data.Tcp_Port)
 	}
 
-	serverWaitGroups.Add(1)
-	go func() {
-		defer serverWaitGroups.Done()
-		signal := <-channels.OSSignalChannel
-		switch signal {
-		case os.Interrupt:
-			logger.Info("Received interrupt signal, shutting down...")
-			shutdownCancel()
-			os.Exit(0)
-		case os.Kill:
-			logger.Info("Received kill signal, shutting down...")
-			shutdownCancel()
-			os.Exit(0)
-		default:
-			logger.Info("Received unknown signal: " + signal.String())
-			os.Exit(100)
-		}
-	}()
+	serverWaitGroups.Go(
+		func() {
+			defer serverWaitGroups.Done()
+			signal := <-channels.OSSignalChannel
+			switch signal {
+			case os.Interrupt:
+				logger.Info("Received interrupt signal, shutting down...")
+				logger.Debug("Stopping PID: " + strconv.Itoa(os.Getpid()))
+				servers.UDPServer.Stop()
+				serverWaitGroups.Wait()
+				os.Exit(0)
+			// case os.Kill:
+			// logger.Info("Received kill signal, shutting down...")
+			// logger.Debug("Stopping PID: " + strconv.Itoa(os.Getpid()))
+			// serverWaitGroups.Wait()
+			// os.Exit(0)
+			default:
+				logger.Info("Received unknown signal: " + signal.String())
+				os.Exit(100)
+			}
+		})
 
 	// Stop the main function for exiting.
 	serverWaitGroups.Wait()
