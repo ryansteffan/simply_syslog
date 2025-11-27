@@ -1,9 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"sync"
-	"time"
 
 	"github.com/ryansteffan/simply_syslog/internal/pipeline"
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
@@ -37,13 +36,7 @@ func main() {
 			"Node One",
 			nil,
 			oneToTwoChan,
-			func(ref *pipeline.PipelineNode[any, OneToTwo]) {
-				iter := 0
-				for {
-					ref.OutChannel <- OneToTwo{data: "Hello from Node One - Message# " + fmt.Sprint(iter)}
-					time.Sleep(time.Second * 1)
-					iter++
-				}
+			func(inChannel chan any, outChannel chan OneToTwo, stopCtx context.Context) {
 			},
 		),
 	)
@@ -53,11 +46,8 @@ func main() {
 			"Node Two",
 			oneToTwoChan,
 			nil,
-			func(ref *pipeline.PipelineNode[OneToTwo, any]) {
-				for {
-					msg := <-ref.InChannel
-					pipelineLogger.Info("Node Two received message: " + msg.data)
-				}
+			func(inChannel chan OneToTwo, outChannel chan any, stopCtx context.Context) {
+
 			},
 		),
 	)

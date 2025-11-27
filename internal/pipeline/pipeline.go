@@ -21,22 +21,34 @@ type PipelineRunner interface {
 	Restart() error
 	GetIsRunning() bool
 	ToggleIsRunning()
+	GetName() string
 }
+
+// Function signature for processing functions that can be run
+// in a processing node.
+//
+// The function takes a input channel of type T,
+// an output channel of type K, and a stop context for graceful shutdowns.
+type ProcFunc[T any, K any] func(
+	inChannel chan T,
+	outChannel chan K,
+	stopCtx context.Context,
+)
 
 // A generic pipeline node that processes data of type T
 // and outputs data of type K.
 type PipelineNode[T any, K any] struct {
 	// Define the observable properties of the node
-	Name       string                        // Name of the node.
-	InChannel  chan T                        // Input channel for receiving data of type T.
-	OutChannel chan K                        // Output channel for sending data of type K.
-	ProcFunc   func(ref *PipelineNode[T, K]) // Processing function for the node.
-	// Define the internal behavior of the node
-	isRunning bool               // Indicates if the node is currently running.
-	stopCtx   context.Context    // Context for stopping the node.
-	stopFunc  context.CancelFunc // Function to cancel the stop context.
-	mutex     sync.Mutex         // Mutex for thread-safe access to isRunning.
-	wg        sync.WaitGroup     // WaitGroup for managing goroutines.
+	InChannel  chan T             // Input channel for receiving data of type T.
+	OutChannel chan K             // Output channel for sending data of type K.
+	ProcFunc   ProcFunc[T, K]     // Processing function for the node.
+	StopFunc   context.CancelFunc // Function to cancel the stop context.
+	StopCtx    context.Context    // Context for stopping the node.
+	// Define the internal properties of the node
+	name      string         // Name of the node.
+	isRunning bool           // Indicates if the node is currently running.
+	mutex     sync.Mutex     // Mutex for thread-safe access to isRunning.
+	wg        sync.WaitGroup // WaitGroup for managing goroutines.
 }
 
 // NewPipelineNode creates a new pipeline node instance and returns a pointer to it.
@@ -57,18 +69,29 @@ func NewPipelineNode[T any, K any](
 	name string,
 	inChan chan T,
 	outChan chan K,
-	procFunc func(ref *PipelineNode[T, K]),
+	procFunc ProcFunc[T, K],
 ) *PipelineNode[T, K] {
 	stopCtx, stopFunc := context.WithCancel(context.Background())
 	return &PipelineNode[T, K]{
-		Name:       name,
+		name:       name,
 		InChannel:  inChan,
 		OutChannel: outChan,
 		ProcFunc:   procFunc,
+		StopCtx:    stopCtx,
+		StopFunc:   stopFunc,
 		isRunning:  false,
-		stopCtx:    stopCtx,
-		stopFunc:   stopFunc,
 	}
+}
+
+// GetName returns the name of the pipeline node.
+// This operation is thread-safe. It is the only way that name
+// should be accessed.
+//
+// GetName implements PipelineRunner.
+func (p *PipelineNode[T, K]) GetName() string {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.name
 }
 
 // GetIsRunning returns the current running state of the pipeline node.
@@ -102,7 +125,7 @@ func (p *PipelineNode[T, K]) Start() error {
 		return errors.New("pipeline node is already running")
 	}
 	p.ToggleIsRunning()
-	go p.ProcFunc(p)
+	go p.ProcFunc(p.InChannel, p.OutChannel, p.StopCtx)
 	return nil
 }
 
@@ -112,7 +135,7 @@ func (p *PipelineNode[T, K]) Start() error {
 // Stop implements PipelineRunner.
 func (p *PipelineNode[T, K]) Stop() error {
 	if p.GetIsRunning() {
-		p.stopFunc()
+		p.StopFunc()
 		p.ToggleIsRunning()
 		return nil
 	}
@@ -207,8 +230,4 @@ func (p *Pipeline) Stop() error {
 func (p *Pipeline) Restart() {
 	p.Stop()
 	p.Start()
-}
-
-func ExamplePipeline() {
-
 }
