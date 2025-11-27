@@ -1,8 +1,11 @@
 package applogger
 
-type Handler int
+// Handlers defines the type for different logging handlers.
+type Handlers int
 
 const (
-	CONSOLE Handler = iota
-	FILE    Handler = iota
+	// CONSOLE represents the console logging handler.
+	CONSOLE Handlers = iota
+	// FILE represents the file logging handler.
+	FILE
 )

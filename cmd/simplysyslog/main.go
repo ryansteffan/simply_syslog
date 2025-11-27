@@ -9,13 +9,7 @@ import (
 )
 
 func main() {
-	pipelineLogger, err := applogger.NewConsoleLogger(
-		applogger.DEBUG,
-		applogger.LogConfig{
-			Name:  "Pipeline Logger",
-			Level: applogger.DEBUG,
-		},
-	)
+	pipelineLogger, err := applogger.NewLogger("PipelineLogger", applogger.DEBUG, applogger.CONSOLE)
 
 	if err != nil {
 		panic(err.Error())
