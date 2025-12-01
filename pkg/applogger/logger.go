@@ -40,11 +40,28 @@ type Logger interface {
 //   - name: The name of the application or component using the logger.
 //   - level: The minimum LogLevel for messages to be logged.
 //   - handler: The type of logging handler to use.
-func NewLogger(name string, level LogLevel, handler Handlers) (Logger, error) {
+//   - facility: The syslog facility code to use for the logger. If nil, the USER facility is used.
+//
+// Generally you will not need to specify a facility, unless you have specific
+// requirements for logging, and as such it can remain nil.
+//
+// Example:
+//
+//	logger, err := applogger.NewLogger("myapp", applogger.INFO, applogger.CONSOLE, nil)
+//
+//	if err != nil {
+//	    panic(err.Error())
+//	}
+//
+//	logger.Info("Application started")
+func NewLogger(name string, level LogLevel, handler Handlers, facility *int) (Logger, error) {
 	var logger Logger
 	var err error
 
-	facility := 5 // Level 5 is the level for syslog.
+	if facility == nil {
+		defaultFacility := 1 // USER facility
+		facility = &defaultFacility
+	}
 
 	config := LogConfig{
 		Name:     name,
@@ -58,7 +75,7 @@ func NewLogger(name string, level LogLevel, handler Handlers) (Logger, error) {
 		}
 		panic("unimplemented")
 	case CONSOLE:
-		logger, err = NewConsoleLogger(facility, LogConfig{
+		logger, err = NewConsoleLogger(*facility, LogConfig{
 			Name:     name,
 			LogLevel: level,
 		})
