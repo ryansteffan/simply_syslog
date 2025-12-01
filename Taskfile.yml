@@ -8,7 +8,7 @@ env:
   CMD_PATH: ./cmd/simplysyslog/main.go
   BUILD_DIR: ./build
 
-tasks:
+tasks:  
   run:
     desc: Run the application using the go run command and the config.json.
     cmds:
@@ -39,6 +39,12 @@ tasks:
         full_ver="{{.VERSION | default "development"}}"
         GOOS=$os GOARCH=$arch go build -o build/$APP_NAME-$os-$arch-v$full_ver $CMD_PATH
         echo "Build completed -> $BUILD_DIR/$APP_NAME-$os-$arch-v$full_ver"
+      - |
+        echo copying config file...
+        cp -r config $BUILD_DIR/config
+        echo "Config file copied to $BUILD_DIR/config"
+      - | 
+        echo "Build and copy process completed."
 
   # Bellow are builds tasks for each OS (amd64, and arm64).
 
