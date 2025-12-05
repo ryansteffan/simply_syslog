@@ -7,7 +7,6 @@ package pipeline
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
@@ -201,7 +200,7 @@ func (p *Pipeline) Start() error {
 			p.logger.Error("Error starting pipeline node: " + err.Error())
 			return err
 		}
-		p.logger.Info("Started pipeline node: " + fmt.Sprint(i))
+		p.logger.Info("Started pipeline node: " + p.nodes[i].GetName())
 		p.wg.Add(1)
 	}
 	return nil
@@ -217,7 +216,7 @@ func (p *Pipeline) Stop() error {
 			p.logger.Error("Error stopping pipeline node: " + err.Error())
 			return err
 		}
-		p.logger.Info("Stopped pipeline node: " + fmt.Sprint(i))
+		p.logger.Info("Stopped pipeline node: " + p.nodes[i].GetName())
 		p.wg.Done()
 	}
 	return nil
