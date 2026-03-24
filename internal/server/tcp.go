@@ -12,11 +12,14 @@ import (
 )
 
 type TCPSyslogServer struct {
-	Conf    config.Config
-	Logger  applogger.Logger
-	Addr    *net.TCPAddr
-	Channel chan []byte
-	Parser  syslog.SyslogParser
+	Conf     config.Config
+	Logger   applogger.Logger
+	Addr     *net.TCPAddr
+	Channel  chan []byte
+	Parser   syslog.SyslogParser
+	listener *net.TCPListener
+	stopped  bool
+	mutex    sync.Mutex
 }
 
 func NewTCPServer(
@@ -53,11 +56,22 @@ func (t *TCPSyslogServer) Start(wg *sync.WaitGroup) error {
 		return err
 	}
 
+	t.mutex.Lock()
+	t.listener = listener
+	t.stopped = false
+	t.mutex.Unlock()
+
 	defer listener.Close()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			t.mutex.Lock()
+			isStopped := t.stopped
+			t.mutex.Unlock()
+			if isStopped {
+				return nil
+			}
 			t.Logger.Error("Error accepting connection: " + err.Error())
 			continue
 		}
@@ -96,12 +110,34 @@ func (t *TCPSyslogServer) handleConnection(conn net.Conn) {
 
 // Stop implements Server.
 func (t *TCPSyslogServer) Stop() error {
-	panic("unimplemented")
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	t.Logger.Info("Stopping TCP Server...")
+
+	if t.stopped {
+		return errors.New("server is already stopped")
+	}
+
+	t.stopped = true
+	if t.listener != nil {
+		t.listener.Close()
+	}
+	return nil
 }
 
 // Restart implements Server.
 func (t *TCPSyslogServer) Restart() error {
-	panic("unimplemented")
+	err := t.Stop()
+	if err != nil {
+		return err
+	}
+	// Start is a blocking function, so launch it in a goroutine.
+	// The WaitGroup is local and satisfies Start's signature (Start calls defer wg.Done()).
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go t.Start(&wg)
+	return nil
 }
 
 var _ Server = (*TCPSyslogServer)(nil)

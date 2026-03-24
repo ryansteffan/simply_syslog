@@ -33,16 +33,17 @@ type Buffer interface {
 }
 
 type SyslogWriteBuffer struct {
-	Data       []ParsedSyslogData
-	MaxLen     int
-	MaxAge     time.Time
-	CurrentLen int
-	CurrentAge time.Time
-	InChannel  chan ParsedSyslogData
-	OutChannel chan ParsedSyslogData
-	Mode       WriteMode
-	FilePath   *string
-	Logger     applogger.Logger
+	Data           []ParsedSyslogData
+	MaxLen         int
+	MaxAge         time.Time
+	MaxAgeDuration time.Duration
+	CurrentLen     int
+	CurrentAge     time.Time
+	InChannel      chan ParsedSyslogData
+	OutChannel     chan ParsedSyslogData
+	Mode           WriteMode
+	FilePath       *string
+	Logger         applogger.Logger
 }
 
 func NewSyslogWriteBuffer(
@@ -54,17 +55,19 @@ func NewSyslogWriteBuffer(
 	filePath *string,
 	logger applogger.Logger,
 ) *SyslogWriteBuffer {
+	maxAgeDuration := time.Duration(maxAge) * time.Second
 	return &SyslogWriteBuffer{
-		Data:       make([]ParsedSyslogData, 0, maxLen),
-		MaxLen:     maxLen,
-		CurrentLen: 0,
-		MaxAge:     time.Now().Add(time.Duration(maxAge) * time.Second),
-		CurrentAge: time.Now(),
-		InChannel:  inChannel,
-		OutChannel: outChannel,
-		Mode:       mode,
-		FilePath:   filePath,
-		Logger:     logger,
+		Data:           make([]ParsedSyslogData, 0, maxLen),
+		MaxLen:         maxLen,
+		CurrentLen:     0,
+		MaxAgeDuration: maxAgeDuration,
+		MaxAge:         time.Now().Add(maxAgeDuration),
+		CurrentAge:     time.Now(),
+		InChannel:      inChannel,
+		OutChannel:     outChannel,
+		Mode:           mode,
+		FilePath:       filePath,
+		Logger:         logger,
 	}
 }
 
@@ -76,14 +79,15 @@ func (s *SyslogWriteBuffer) Add(item ParsedSyslogData) error {
 		s.CurrentLen++
 		s.Logger.Debug("Item added. CurrentLen: " + fmt.Sprint(s.CurrentLen))
 		return nil
-	} else {
-		s.Logger.Info("Buffer full, triggering WriteHandler")
-		s.WriteHandler()
-		s.Data = append(s.Data, item)
-		s.CurrentLen++
-		s.Logger.Debug("Item added after flush. CurrentLen: " + fmt.Sprint(s.CurrentLen))
-		return nil
 	}
+	s.Logger.Info("Buffer full, triggering WriteHandler")
+	if err := s.WriteHandler(); err != nil {
+		return err
+	}
+	s.Data = append(s.Data, item)
+	s.CurrentLen++
+	s.Logger.Debug("Item added after flush. CurrentLen: " + fmt.Sprint(s.CurrentLen))
+	return nil
 }
 
 // Flush implements Buffer.
@@ -91,7 +95,7 @@ func (s *SyslogWriteBuffer) Flush() error {
 	s.Logger.Info("Flushing buffer")
 	s.Data = make([]ParsedSyslogData, 0, s.MaxLen)
 	s.CurrentLen = 0
-	s.MaxAge = time.Now().Add(time.Until(s.MaxAge))
+	s.MaxAge = time.Now().Add(s.MaxAgeDuration)
 	s.CurrentAge = time.Now()
 	s.Logger.Debug("Buffer flushed. CurrentLen reset to 0.")
 	return nil
@@ -140,14 +144,15 @@ func (s *SyslogWriteBuffer) WriteHandler() error {
 func (s *SyslogWriteBuffer) MonitorAge(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	ticker := time.NewTicker(time.Until(s.MaxAge))
+	ticker := time.NewTicker(s.MaxAgeDuration)
 	defer ticker.Stop()
 	for {
 		<-ticker.C
-		if time.Since(s.CurrentAge) >= time.Until(s.MaxAge) && s.CurrentLen > 0 {
+		if s.CurrentLen > 0 && time.Since(s.CurrentAge) >= s.MaxAgeDuration {
 			s.Logger.Info("MaxAge reached, triggering WriteHandler")
 			s.WriteHandler()
 		}
+		ticker.Reset(s.MaxAgeDuration)
 	}
 }
 

@@ -59,7 +59,8 @@ func LoadConfig(path string) (*Config, error) {
 	switch path {
 
 	case "ENV":
-		var envTypeError *error
+		var envTypeErrVal error
+		envTypeError := &envTypeErrVal
 
 		conf := Config{
 			FileLocation: "ENV",
@@ -107,7 +108,7 @@ func LoadConfig(path string) (*Config, error) {
 			},
 		}
 
-		if envTypeError != nil {
+		if *envTypeError != nil {
 			return nil, *envTypeError
 		}
 
@@ -144,6 +145,9 @@ func (conf *Config) SaveConfig() error {
 		return errors.New("there was an error encoding the save file")
 	}
 
-	os.WriteFile(conf.FileLocation, data, 0644)
+	err = os.WriteFile(conf.FileLocation, data, 0644)
+	if err != nil {
+		return err
+	}
 	return nil
 }

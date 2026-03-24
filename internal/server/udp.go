@@ -17,9 +17,9 @@ type UDPSyslogServer struct {
 	Addr       *net.UDPAddr
 	Channel    chan []byte
 	Parser     syslog.SyslogParser
-	cancleFunc func()
-	cancleCtx  context.Context
-	stoppped   bool
+	cancelFunc func()
+	cancelCtx  context.Context
+	stopped    bool
 	mutex      sync.Mutex
 }
 
@@ -39,7 +39,7 @@ func NewUDPServer(
 		return nil, errors.New("there was an error resolving the udp server address")
 	}
 
-	context, cancleFunc := context.WithCancel(context.Background())
+	context, cancelFunc := context.WithCancel(context.Background())
 
 	return &UDPSyslogServer{
 		Conf:       conf,
@@ -47,8 +47,8 @@ func NewUDPServer(
 		Addr:       addr,
 		Channel:    channel,
 		Parser:     parser,
-		cancleFunc: cancleFunc,
-		cancleCtx:  context,
+		cancelFunc: cancelFunc,
+		cancelCtx:  context,
 	}, nil
 }
 
@@ -57,7 +57,7 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 
 	u.mutex.Lock()
-	u.stoppped = false
+	u.stopped = false
 	u.mutex.Unlock()
 
 	server, err := net.ListenUDP("udp", u.Addr)
@@ -90,7 +90,7 @@ func (u *UDPSyslogServer) Start(wg *sync.WaitGroup) error {
 		u.Logger.Debug("Message received: " + string(msg))
 
 		select {
-		case <-u.cancleCtx.Done():
+		case <-u.cancelCtx.Done():
 			u.Logger.Info("UDP server is stopping, exiting message receive loop")
 			return nil
 		case u.Channel <- msg:
@@ -108,11 +108,11 @@ func (u *UDPSyslogServer) Stop() error {
 
 	u.Logger.Info("Stopping UDP Server...")
 
-	if u.stoppped {
+	if u.stopped {
 		return errors.New("server is already stopped")
 	}
-	u.cancleFunc()
-	u.stoppped = true
+	u.cancelFunc()
+	u.stopped = true
 	return nil
 }
 

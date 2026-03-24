@@ -63,10 +63,10 @@ func main() {
 
 	switch conf.Data.Protocol {
 	case "UDP":
-		// Create the UPD Server Node
+		// Create the UDP Server Node
 		serverPipeline.AddNode(
 			pipeline.NewPipelineNode(
-				"UPD Server",
+				"UDP Server",
 				nil,
 				channels.SyslogChannel,
 				func(inChannel chan any, outChannel chan []byte, stopCtx context.Context) {
@@ -89,10 +89,10 @@ func main() {
 		)
 
 	case "BOTH":
-		// Create the UPD Server Node
+		// Create the UDP Server Node
 		serverPipeline.AddNode(
 			pipeline.NewPipelineNode(
-				"UPD Server",
+				"UDP Server",
 				nil,
 				channels.SyslogChannel,
 				func(inChannel chan any, outChannel chan []byte, stopCtx context.Context) {
