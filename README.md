@@ -23,14 +23,15 @@ that is easy to configure, deploy, and scale.
 ## Features:
 
 - UDP syslog support
-- Supports docker.
+- Supports docker
 - Highly configurable
 - Able to handle large numbers of requests
 
 ## Upcoming features:
 
+- Migration to Go
 - Support for TCP
-- Support for encryption.
+- Support for encryption
 
 # How to Use:
 
