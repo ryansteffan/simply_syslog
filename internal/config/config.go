@@ -8,9 +8,14 @@ import (
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
+// globalConfig is the private application level config,
+// access must be done via GetConfig and SaveConfig.
 var globalConfig *Config
+
+// globalConfigMutex is used to synchronize access to the globalConfig variable.
 var globalConfigMutex sync.Mutex
 
+// configPath is the path to the configuration file on the file system.
 var configPath = "./config/config.json"
 
 // var regexConfigPath = "./config/regex_config.json"
@@ -31,6 +36,7 @@ const (
 	ServerModeAll ServerMode = "all"
 )
 
+// Config defines the configuration for the syslog server.
 type Config struct {
 	Version          string             `json:"version"`
 	ServerMode       ServerMode         `json:"server_mode"`
@@ -41,6 +47,7 @@ type Config struct {
 	SelfLoggingLevel applogger.LogLevel `json:"self_logging_level"`
 }
 
+// The default config that should be generated.
 var defaultConfig = &Config{
 	Version:          "1.0.0",
 	ServerMode:       ServerModeUDP,
@@ -76,10 +83,8 @@ func SaveConfig(config *Config) error {
 	return nil
 }
 
-// LoadConfig loads the configuration from the file system
-func LoadConfig() (*Config, error) {
-	globalConfigMutex.Lock()
-	defer globalConfigMutex.Unlock()
+// loadConfig loads the configuration from the file system
+func loadConfig() (*Config, error) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, err
 	}
@@ -105,14 +110,17 @@ func LoadConfig() (*Config, error) {
 func GetConfig() (*Config, error) {
 	globalConfigMutex.Lock()
 	defer globalConfigMutex.Unlock()
+
 	if globalConfig != nil {
 		return globalConfig, nil
 	}
-	config, err := LoadConfig()
+
+	cfg, err := loadConfig()
 	if err != nil {
 		return nil, err
 	}
-	globalConfig = config
+
+	globalConfig = cfg
 	return globalConfig, nil
 }
 
@@ -134,9 +142,7 @@ func GenerateConfig(fromENV bool) error {
 			}
 			return SaveConfig(globalConfig)
 		} else {
-			// Save the default config to the file system
-			globalConfig = defaultConfig
-			return SaveConfig(globalConfig)
+			return SaveConfig(defaultConfig)
 		}
 	}
 	return nil

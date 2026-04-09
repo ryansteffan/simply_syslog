@@ -349,6 +349,7 @@ var _ Node = (*PipelineNode[any, any])(nil)
 type ProcessorAPI[T any, K any] interface {
 	GetNodeName() string
 	GetNodeState() RunnerState
+	GetNodeLogger() applogger.Logger
 	GetNodeContext() context.Context
 	GetNodeCancelFunc() context.CancelFunc
 	GetParentPipeline() *Pipeline
@@ -367,6 +368,10 @@ type ProcessorAPIContext[T any, K any] struct {
 // GetNodeCancelFunc implements [ProcessorAPI].
 func (p *ProcessorAPIContext[T, K]) GetNodeCancelFunc() context.CancelFunc {
 	return p.cancel
+}
+
+func (p *ProcessorAPIContext[T, K]) GetNodeLogger() applogger.Logger {
+	return p.nodeState.logger
 }
 
 // GetNodeWaitGroup implements [ProcessorAPI].

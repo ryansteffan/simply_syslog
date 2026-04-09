@@ -46,7 +46,7 @@ func main() {
 
 	// TODO: Add proper data types
 	errChan := make(chan error, 10)
-	serverToParserChan := make(chan string, 1000)
+	serverToParserChan := make(chan server.ServerTransferData, 1000)
 	parserToBufferChan := make(chan string, 1000)
 	bufferToWriterChan := make(chan string, 1000)
 
