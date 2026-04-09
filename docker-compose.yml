@@ -5,13 +5,13 @@ services:
     image: ryansteffan/simply_syslog:0.8.0-alpha.1
     container_name: simply_syslog
     restart: always
-    # build:
-    #   context: .
+    build:
+      context: .
     environment:
       PROTOCOL: "UDP"
       BIND_ADDRESS: "0.0.0.0"
       UDP_PORT: "514"
-      TCP_PORT: "514"
+      TCP_PORT: "5124"
       MAX_TCP_CONNECTIONS: "10"
       BUFFER_LENGTH: "32"
       BUFFER_LIFESPAN: "5"
@@ -22,7 +22,7 @@ services:
       - simply_syslog_data:/var/log/
     ports:
       - "514:514/udp"
-      - "514:514/tcp"
+      - "5124:5124/tcp"
 
 volumes:
   simply_syslog_data:

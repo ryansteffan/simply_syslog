@@ -1,149 +1,143 @@
-// This package contains the required code to load the
-// JSON server config into the application.
 package config
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
+	"sync"
 
-	"github.com/ryansteffan/simply_syslog/internal/utils"
+	"github.com/ryansteffan/simply_syslog/pkg/applogger"
+)
+
+var globalConfig *Config
+var globalConfigMutex sync.Mutex
+
+var configPath = "./config/config.json"
+
+// var regexConfigPath = "./config/regex_config.json"
+// var writerConfigPath = "./config/writer_config.json"
+
+// ServerMode defines the mode in which the server can run.
+type ServerMode string
+
+const (
+	// ServerModeUDP runs the server in UDP mode, listening for syslog messages on the specified UDP port.
+	ServerModeUDP ServerMode = "udp"
+	// ServerModeTCP runs the server in TCP mode, listening for syslog messages on the specified TCP port.
+	ServerModeTCP ServerMode = "tcp"
+	// ServerModeTLS runs the server in TLS mode, listening for syslog messages on the specified TLS port.
+	ServerModeTLS ServerMode = "tls"
+	// ServerModeAll runs the server in all modes, listening for syslog messages on the specified
+	// UDP, TCP, and TLS ports.
+	ServerModeAll ServerMode = "all"
 )
 
 type Config struct {
-	FileLocation string
-	Data         ConfigData
+	Version          string             `json:"version"`
+	ServerMode       ServerMode         `json:"server_mode"`
+	BindAddress      string             `json:"bind_address"`
+	UDPPort          string             `json:"udp_port"`
+	TCPPort          string             `json:"tcp_port"`
+	TLSPort          string             `json:"tls_port"`
+	SelfLoggingLevel applogger.LogLevel `json:"self_logging_level"`
 }
 
-type Test struct {
-	Name string `json:"name"`
+var defaultConfig = &Config{
+	Version:          "1.0.0",
+	ServerMode:       ServerModeUDP,
+	BindAddress:      "0.0.0.0",
+	UDPPort:          "514",
+	TCPPort:          "514",
+	TLSPort:          "6514",
+	SelfLoggingLevel: applogger.DEBUG,
 }
 
-/*
-Represents the JSON config file for the server.
-
-Tags correspond to the field in the JSON file.
-*/
-type ConfigData struct {
-	Protocol            string `json:"protocol"`
-	Bind_Address        string `json:"bind_address"`
-	Udp_Port            string `json:"udp_port"`
-	Tcp_Port            string `json:"tcp_port"`
-	Max_Tcp_Connections int    `json:"max_tcp_connections"`
-	Buffer_Length       int    `json:"buffer_length"`
-	Buffer_Lifespan     int    `json:"buffer_lifespan"`
-	Max_Message_Size    int    `json:"max_message_size"`
-	Syslog_Path         string `json:"syslog_path"`
-	Debug_Messages      bool   `json:"debug_messages"`
-	Do_File_Writes      bool   `json:"do_file_writes"`
-	Do_Stdout_Writes    bool   `json:"do_stdout_writes"`
-}
-
-/*
-Loads in the config data for the server.
-
-The config can be retrieved via two methods:
-
-1) Using environment variables.
-
-2) Using a json config file.
-
-To load a json config file, pass the path to the config file.
-
-When loading the config from environment variables, pass in the "ENV" string.
-
-The path for the config will then be set to "ENV".
-*/
-func LoadConfig(path string) (*Config, error) {
-
-	switch path {
-
-	case "ENV":
-		var envTypeError *error
-
-		conf := Config{
-			FileLocation: "ENV",
-			Data: ConfigData{
-				Protocol:     utils.DefaultStringValue(os.Getenv("PROTOCOL"), "UDP"),
-				Bind_Address: utils.DefaultStringValue(os.Getenv("BIND_ADDRESS"), "0.0.0.0"),
-				Udp_Port:     utils.DefaultStringValue(os.Getenv("UDP_PORT"), "514"),
-				Tcp_Port:     utils.DefaultStringValue(os.Getenv("TCP_PORT"), "514"),
-				Syslog_Path:  utils.DefaultStringValue(os.Getenv("SYSLOG_PATH"), "/var/log/simply_syslog"),
-
-				Max_Tcp_Connections: utils.InlineIntParse(
-					utils.DefaultStringValue(os.Getenv("MAX_TCP_CONNECTIONS"), "10"),
-					envTypeError,
-				),
-
-				Buffer_Length: utils.InlineIntParse(
-					utils.DefaultStringValue(os.Getenv("BUFFER_LENGTH"), "32"),
-					envTypeError,
-				),
-
-				Buffer_Lifespan: utils.InlineIntParse(
-					utils.DefaultStringValue(os.Getenv("BUFFER_LIFESPAN"), "5"),
-					envTypeError,
-				),
-
-				Max_Message_Size: utils.InlineIntParse(
-					utils.DefaultStringValue(os.Getenv("MAX_MESSAGE_SIZE"), "1024"),
-					envTypeError,
-				),
-
-				Debug_Messages: utils.InlineBoolParse(
-					utils.DefaultStringValue(os.Getenv("DEBUG_MESSAGES"), "True"),
-					envTypeError,
-				),
-
-				Do_File_Writes: utils.InlineBoolParse(
-					utils.DefaultStringValue(os.Getenv("DO_FILE_WRITES"), "True"),
-					envTypeError,
-				),
-
-				Do_Stdout_Writes: utils.InlineBoolParse(
-					utils.DefaultStringValue(os.Getenv("DO_STDOUT_WRITES"), "True"),
-					envTypeError,
-				),
-			},
-		}
-
-		if envTypeError != nil {
-			return nil, *envTypeError
-		}
-
-		return &conf, nil
-
-	default:
-		configFile, err := os.ReadFile(path)
-		if err != nil {
-			return nil, errors.New("error reading in config file contents")
-		}
-
-		var config Config
-		err = json.Unmarshal(configFile, &config.Data)
-		if err != nil {
-			return nil, err
-		}
-
-		config.FileLocation = path
-
-		return &config, nil
-	}
-}
-
-/*
-Saves a config to it's path.
-
-If the config is loaded from environment variables, then it will update variables.
-
-If a json config was loaded, then the changes are written to the loaded file.
-*/
-func (conf *Config) SaveConfig() error {
-	data, err := json.Marshal(conf.Data)
+// SaveConfig saves the configuration to the file system and updates the globalConfig variable
+func SaveConfig(config *Config) error {
+	globalConfigMutex.Lock()
+	defer globalConfigMutex.Unlock()
+	file, err := os.Create(configPath)
 	if err != nil {
-		return errors.New("there was an error encoding the save file")
+		return err
+	}
+	defer file.Close()
+
+	json, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
 	}
 
-	os.WriteFile(conf.FileLocation, data, 0644)
+	_, err = file.Write(json)
+	if err != nil {
+		return err
+	}
+
+	globalConfig = config
+
+	return nil
+}
+
+// LoadConfig loads the configuration from the file system
+func LoadConfig() (*Config, error) {
+	globalConfigMutex.Lock()
+	defer globalConfigMutex.Unlock()
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil, err
+	}
+
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	var config Config
+
+	err = decoder.Decode(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// GetConfig returns the global configuration, loading it from the file system if it hasn't been loaded yet
+func GetConfig() (*Config, error) {
+	globalConfigMutex.Lock()
+	defer globalConfigMutex.Unlock()
+	if globalConfig != nil {
+		return globalConfig, nil
+	}
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	globalConfig = config
+	return globalConfig, nil
+}
+
+// GenerateConfig generates the configuration file if it doesn't exist, either from the environment
+// variables or from the default config
+//
+// It is intended for this to be called at the start of the application but it can be called later to no effect.
+func GenerateConfig(fromENV bool) error {
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if fromENV {
+			// Make the initial config from the environment variables
+			globalConfig = &Config{
+				Version:     "1.0.0",
+				ServerMode:  ServerMode(os.Getenv("SERVER_MODE")),
+				BindAddress: os.Getenv("BIND_ADDRESS"),
+				UDPPort:     os.Getenv("UDP_PORT"),
+				TCPPort:     os.Getenv("TCP_PORT"),
+				TLSPort:     os.Getenv("TLS_PORT"),
+			}
+			return SaveConfig(globalConfig)
+		} else {
+			// Save the default config to the file system
+			globalConfig = defaultConfig
+			return SaveConfig(globalConfig)
+		}
+	}
 	return nil
 }

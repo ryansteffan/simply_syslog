@@ -1,14 +1,9 @@
 {
-	"protocol": "UDP",
-	"bind_address": "0.0.0.0",
-	"udp_port": "514",
-	"tcp_port": "6514",
-	"max_tcp_connections": 10,
-	"buffer_length": 32,
-	"buffer_lifespan": 5,
-	"max_message_size": 1024,
-	"syslog_path": "/var/log/syslog/syslog.log",
-	"debug_messages": true,
-	"do_file_write": true,
-	"do_db_write": true
+  "version": "1.0.0",
+  "server_mode": "udp",
+  "bind_address": "0.0.0.0",
+  "udp_port": "514",
+  "tcp_port": "514",
+  "tls_port": "6514",
+  "self_logging_level": 7
 }

@@ -28,7 +28,7 @@ WORKDIR /bin/
 
 COPY --from=builder /build/simply-syslog .
 
-VOLUME [ ${SYSLOG_PATH} ]
+VOLUME [ "/var/log/" ]
 
 EXPOSE ${UDP_PORT}/udp
 EXPOSE ${TCP_PORT}/tcp

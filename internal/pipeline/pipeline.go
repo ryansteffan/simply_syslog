@@ -1,232 +1,443 @@
-// Contains the implementation for a generic pipeline processing system.
-// Nodes are added sequentially to the pipeline and data flows from
-// one node to the next via channels. Each node has a processing function
-// that defines its behavior.
 package pipeline
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
 )
 
-// PipelineRunner defines the interface that a node within the
-// pipeline must implement to have the required control methods.
-type PipelineRunner interface {
+// RunnerState represents the current state of a pipeline node.
+type RunnerState int
+
+const (
+	Starting RunnerState = iota // The node is in the process of starting
+	Running                     // The node is currently running
+	Stopping                    // The node is in the process of stopping
+	Stopped                     // The node has been stopped
+)
+
+type Runner interface {
 	Start() error
 	Stop() error
 	Restart() error
-	GetIsRunning() bool
-	ToggleIsRunning()
+	Wait()
+}
+
+type Node interface {
+	Runner
 	GetName() string
+	GetLogger() applogger.Logger
+	GetState() RunnerState
+	GetParentPipeline() *Pipeline
+	setParentPipeline(p *Pipeline)
 }
 
-// Function signature for processing functions that can be run
-// in a processing node.
-//
-// The function takes a input channel of type T,
-// an output channel of type K, and a stop context for graceful shutdowns.
-type ProcFunc[T any, K any] func(
-	inChannel chan T,
-	outChannel chan K,
-	stopCtx context.Context,
-)
+type Pipeline struct {
+	Nodes  []Node           // Order slice of pipeline nodes
+	Logger applogger.Logger // Logger for the pipeline to use
 
-// A generic pipeline node that processes data of type T
-// and outputs data of type K.
-type PipelineNode[T any, K any] struct {
-	// Define the observable properties of the node
-	InChannel  chan T             // Input channel for receiving data of type T.
-	OutChannel chan K             // Output channel for sending data of type K.
-	ProcFunc   ProcFunc[T, K]     // Processing function for the node.
-	StopFunc   context.CancelFunc // Function to cancel the stop context.
-	StopCtx    context.Context    // Context for stopping the node.
-	// Define the internal properties of the node
-	name      string         // Name of the node.
-	isRunning bool           // Indicates if the node is currently running.
-	mutex     sync.Mutex     // Mutex for thread-safe access to isRunning.
-	wg        sync.WaitGroup // WaitGroup for managing goroutines.
+	baseContext        context.Context    // Base context from which pipeline contexts are derived
+	pipelineContext    context.Context    // Context for managing the pipeline's lifecycle
+	pipelineCancelFunc context.CancelFunc // Function to cancel the pipeline's context
+	mutex              sync.Mutex         // Mutex to protect state changes at the pipeline level
+	state              RunnerState        // Current state of the pipeline
 }
 
-// NewPipelineNode creates a new pipeline node instance and returns a pointer to it.
-//
-// When making a new pipeline node, the caller must provide the following:
-//   - name: A string name for the node.
-//   - inChan: A channel for receiving data of type T.
-//   - outChan: A channel for sending data of type K.
-//   - procFunc: A function that takes a reference to the PipelineNode
-//     that runs the processing logic.
-//
-// If the node is not going to pass data or is not taking data in,
-// the the respective channel can be set to nil.
-//
-// WARNING: It is the responsibility of the caller to ensure that the procFunc
-// handles nil channels appropriately, as well as shutdown logic.
-func NewPipelineNode[T any, K any](
-	name string,
-	inChan chan T,
-	outChan chan K,
-	procFunc ProcFunc[T, K],
-) *PipelineNode[T, K] {
-	stopCtx, stopFunc := context.WithCancel(context.Background())
-	return &PipelineNode[T, K]{
-		name:       name,
-		InChannel:  inChan,
-		OutChannel: outChan,
-		ProcFunc:   procFunc,
-		StopCtx:    stopCtx,
-		StopFunc:   stopFunc,
-		isRunning:  false,
+func NewPipeline(parentContext context.Context, logger applogger.Logger) *Pipeline {
+	return &Pipeline{
+		Nodes:       make([]Node, 0),
+		Logger:      logger,
+		baseContext: parentContext,
+		state:       Stopped,
 	}
 }
 
-// GetName returns the name of the pipeline node.
-// This operation is thread-safe. It is the only way that name
-// should be accessed.
-//
-// GetName implements PipelineRunner.
-func (p *PipelineNode[T, K]) GetName() string {
+func (p *Pipeline) AddNode(node Node) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
+	if p.state != Stopped {
+		return fmt.Errorf("cannot add node: pipeline is not stopped")
+	}
+	node.setParentPipeline(p)
+	p.Nodes = append(p.Nodes, node)
+	return nil
+}
+
+// Restart implements [Runner].
+func (p *Pipeline) Restart() error {
+	if err := p.Stop(); err != nil {
+		return err
+	}
+	return p.Start()
+}
+
+// Start implements [Runner].
+func (p *Pipeline) Start() error {
+	p.mutex.Lock()
+	if p.state == Running || p.state == Starting {
+		p.mutex.Unlock()
+		return fmt.Errorf("pipeline is already running or starting")
+	}
+	p.state = Starting
+	p.pipelineContext, p.pipelineCancelFunc = context.WithCancel(p.baseContext)
+	nodes := make([]Node, len(p.Nodes))
+	copy(nodes, p.Nodes)
+	p.mutex.Unlock()
+
+	startedNodes := make([]Node, 0)
+	for _, node := range nodes {
+		if err := node.Start(); err != nil {
+			// If starting a node fails, stop all previously started nodes
+			for _, startedNode := range startedNodes {
+				startedNode.Stop()
+			}
+
+			p.mutex.Lock()
+			p.state = Stopped
+			if p.pipelineCancelFunc != nil {
+				p.pipelineCancelFunc()
+			}
+			p.mutex.Unlock()
+
+			return fmt.Errorf("failed to start node %s: %w", node.GetName(), err)
+		}
+		startedNodes = append(startedNodes, node)
+	}
+
+	p.mutex.Lock()
+	p.state = Running
+	p.mutex.Unlock()
+
+	return nil
+}
+
+// Stop implements [Runner].
+func (p *Pipeline) Stop() error {
+	p.mutex.Lock()
+	if p.state == Stopped {
+		p.mutex.Unlock()
+		return nil
+	}
+
+	if p.state != Running && p.state != Stopping {
+		state := p.state
+		p.mutex.Unlock()
+		return fmt.Errorf("pipeline is not running (state: %v)", state)
+	}
+
+	if p.state == Stopping {
+		p.mutex.Unlock()
+		p.Wait()
+		return nil
+	}
+
+	p.state = Stopping
+	nodes := make([]Node, len(p.Nodes))
+	copy(nodes, p.Nodes)
+	p.mutex.Unlock()
+
+	var stopErrs []error
+	for nodeIndex := len(nodes) - 1; nodeIndex >= 0; nodeIndex-- {
+		node := nodes[nodeIndex]
+		if err := node.Stop(); err != nil {
+			stopErrs = append(stopErrs, fmt.Errorf("failed to stop node %s: %w", node.GetName(), err))
+		}
+	}
+
+	p.mutex.Lock()
+	p.state = Stopped
+
+	// Cleanup the pipeline context after nodes have been safely stopped
+	if p.pipelineCancelFunc != nil {
+		p.pipelineCancelFunc()
+	}
+
+	p.mutex.Unlock()
+
+	if len(stopErrs) > 0 {
+		return fmt.Errorf("errors occurred while stopping nodes: %v", stopErrs)
+	}
+
+	return nil
+}
+
+// Wait implements [Runner].
+func (p *Pipeline) Wait() {
+	p.mutex.Lock()
+	nodes := make([]Node, len(p.Nodes))
+	copy(nodes, p.Nodes)
+	p.mutex.Unlock()
+
+	for _, node := range nodes {
+		node.Wait()
+	}
+}
+
+var _ Runner = (*Pipeline)(nil)
+
+type PipelineNode[T any, K any] struct {
+	name    string           // A unique name for the node
+	process Processor[T, K]  // The function that handles processing data
+	inChan  <-chan T         // The channel that the processor reads from
+	outChan chan<- K         // The channel that the processor writes to
+	errChan chan<- error     // The channel that the processor writes errors to
+	logger  applogger.Logger // A logger for logging messages
+
+	parent         *Pipeline          // Reference to the parent pipeline, attached when added to pipeline.
+	state          RunnerState        // Current state of the node
+	nodeContext    context.Context    // Context for managing the node's lifecycle
+	nodeCancelFunc context.CancelFunc // Function to cancel the node's context
+	wg             *sync.WaitGroup    // WaitGroup to manage goroutines
+	mutex          sync.Mutex         // Mutex to protect state changes
+}
+
+func NewPipelineNode[T any, K any](
+	name string,
+	logger applogger.Logger,
+	inChan <-chan T,
+	outChan chan<- K,
+	errChan chan<- error,
+	process Processor[T, K],
+) Node {
+	return &PipelineNode[T, K]{
+		name:    name,
+		process: process,
+		inChan:  inChan,
+		outChan: outChan,
+		errChan: errChan,
+		logger:  logger,
+		state:   Stopped,
+		wg:      new(sync.WaitGroup),
+	}
+}
+
+// GetName implements [Node].
+func (p *PipelineNode[T, K]) GetName() string {
 	return p.name
 }
 
-// GetIsRunning returns the current running state of the pipeline node.
-// This operation is thread-safe. It is the only way that isRunning
-// should be accessed.
-//
-// GetIsRunning implements PipelineRunner.
-func (p *PipelineNode[T, K]) GetIsRunning() bool {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	return p.isRunning
+func (p *PipelineNode[T, K]) GetLogger() applogger.Logger {
+	return p.logger
 }
 
-// ToggleIsRunning toggles the running state of the pipeline node.
-// This operation is thread-safe and as such it should be the only
-// way that isRunning is modified.
-//
-// ToggleIsRunning implements PipelineRunner.
-func (p *PipelineNode[T, K]) ToggleIsRunning() {
+// GetParentPipeline implements [Node].
+func (p *PipelineNode[T, K]) GetParentPipeline() *Pipeline {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.isRunning = !p.isRunning
+	return p.parent
 }
 
-// Start begins the execution of the referenced pipeline node.
-// If an error occurs, it is returned.
-//
-// Start implements PipelineRunner.
-func (p *PipelineNode[T, K]) Start() error {
-	if p.GetIsRunning() {
-		return errors.New("pipeline node is already running")
+// GetState implements [Node].
+func (p *PipelineNode[T, K]) GetState() RunnerState {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.state
+}
+
+// setParentPipeline implements [Node].
+func (p *PipelineNode[T, K]) setParentPipeline(parent *Pipeline) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.parent = parent
+}
+
+// Restart implements [Runner].
+func (p *PipelineNode[T, K]) Restart() error {
+	errors := make([]error, 0)
+	if err := p.Stop(); err != nil {
+		errors = append(errors, fmt.Errorf("failed to stop node %s: %w", p.name, err))
 	}
-	p.ToggleIsRunning()
-	go p.ProcFunc(p.InChannel, p.OutChannel, p.StopCtx)
+
+	if len(errors) > 0 {
+		return fmt.Errorf("errors occurred during restart: %v", errors)
+	}
+	return p.Start()
+}
+
+// Start implements [Runner].
+func (p *PipelineNode[T, K]) Start() error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if p.state == Running || p.state == Starting {
+		return fmt.Errorf("node %s is already running", p.name)
+	}
+
+	p.state = Starting
+
+	if p.parent == nil {
+		p.logger.Error("node not attached to pipeline, context derived from background")
+		p.nodeContext, p.nodeCancelFunc = context.WithCancel(context.Background())
+	} else {
+		p.nodeContext, p.nodeCancelFunc = context.WithCancel(p.parent.pipelineContext)
+	}
+
+	ctx := p.nodeContext
+	cancel := p.nodeCancelFunc
+
+	p.wg.Add(1)
+	go func() {
+		defer func() {
+			if cancel != nil {
+				cancel() // Prevent context leaks if goroutine exits naturally
+			}
+			p.mutex.Lock()
+			p.state = Stopped
+			p.mutex.Unlock()
+			p.wg.Done()
+		}()
+		if p.process == nil {
+			p.logger.Error("no process function defined for node")
+			return
+		}
+		p.process(&ProcessorAPIContext[T, K]{
+			nodeState: p,
+			ctx:       ctx,
+			cancel:    cancel,
+		})
+	}()
+
+	p.state = Running
+
 	return nil
 }
 
-// Stops the referenced pipeline node.
-// If an error occurs, it is returned.
-//
-// Stop implements PipelineRunner.
+// Stop implements [Runner].
 func (p *PipelineNode[T, K]) Stop() error {
-	if p.GetIsRunning() {
-		p.StopFunc()
-		p.ToggleIsRunning()
+	// Acquire lock to validate and transition state, and capture cancel func.
+	p.mutex.Lock()
+	if p.state == Stopped {
+		p.mutex.Unlock()
+		return nil // Already stopped, return gracefully
+	}
+
+	if p.state != Running && p.state != Stopping {
+		state := p.state
+		p.mutex.Unlock()
+		return fmt.Errorf("node %s is not running (state: %v)", p.name, state)
+	}
+
+	if p.state == Stopping {
+		p.mutex.Unlock()
+		p.wg.Wait()
 		return nil
 	}
-	return errors.New("pipeline node is not running")
-}
+	p.state = Stopping
+	cancel := p.nodeCancelFunc
+	p.mutex.Unlock()
 
-// Stops the referenced pipeline node and then starts it again.
-// The function returns any error encountered during stopping or starting.
-//
-// Restart implements PipelineRunner.
-func (p *PipelineNode[T, K]) Restart() error {
-	err := p.Stop()
-	if err != nil {
-		return err
+	if cancel != nil {
+		cancel()
 	}
+	p.wg.Wait()
 
-	err = p.Start()
-	if err != nil {
-		return err
-	}
+	p.mutex.Lock()
+	p.state = Stopped
+	p.mutex.Unlock()
 
 	return nil
 }
 
-// Validates that the PipelineNode struct implements the PipelineRunner interface.
-var _ PipelineRunner = (*PipelineNode[any, any])(nil)
-
-// A pipeline represents a collection of PipelineRunner nodes
-// that are connected in sequential order.
-type Pipeline struct {
-	nodes  []PipelineRunner
-	logger applogger.Logger
-	wg     *sync.WaitGroup
+// Wait implements [Runner].
+func (p *PipelineNode[T, K]) Wait() {
+	p.wg.Wait()
 }
 
-// NewPipeline creates a new pipeline instance and returns a pointer to it.
-func NewPipeline(wg *sync.WaitGroup, logger applogger.Logger) *Pipeline {
-	return &Pipeline{
-		nodes:  make([]PipelineRunner, 0),
-		logger: logger,
-		wg:     wg,
+var _ Node = (*PipelineNode[any, any])(nil)
+
+type ProcessorAPI[T any, K any] interface {
+	GetNodeName() string
+	GetNodeState() RunnerState
+	GetNodeContext() context.Context
+	GetNodeCancelFunc() context.CancelFunc
+	GetParentPipeline() *Pipeline
+	GetNodeWaitGroup() *sync.WaitGroup
+	Send(data K) error
+	SendError(err error) error
+	Receive() (data T, ok bool)
+}
+
+type ProcessorAPIContext[T any, K any] struct {
+	nodeState *PipelineNode[T, K]
+	ctx       context.Context
+	cancel    context.CancelFunc
+}
+
+// GetNodeCancelFunc implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) GetNodeCancelFunc() context.CancelFunc {
+	return p.cancel
+}
+
+// GetNodeWaitGroup implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) GetNodeWaitGroup() *sync.WaitGroup {
+	return p.nodeState.wg
+}
+
+// GetParentPipeline implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) GetParentPipeline() *Pipeline {
+	return p.nodeState.parent
+}
+
+// GetNodeName implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) GetNodeName() string {
+	return p.nodeState.name
+}
+
+// GetNodeContext implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) GetNodeContext() context.Context {
+	return p.ctx
+}
+
+// GetNodeState implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) GetNodeState() RunnerState {
+	p.nodeState.mutex.Lock()
+	defer p.nodeState.mutex.Unlock()
+	return p.nodeState.state
+}
+
+// Receive implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) Receive() (data T, ok bool) {
+	if p.nodeState.inChan == nil {
+		var zero T
+		return zero, false
+	}
+	select {
+	case <-p.ctx.Done():
+		var zero T
+		return zero, false
+	case v, ok := <-p.nodeState.inChan:
+		return v, ok
 	}
 }
 
-// Adds a node to the pipeline.
-//
-// Note: Nodes should be added in the order
-// that they will be executed.
-//
-// (ie. Node 1 --channel--> Node 2 --channel--> Node 3)
-func (p *Pipeline) AddNode(node PipelineRunner) {
-	p.nodes = append(p.nodes, node)
-}
-
-// Start all of the nodes in the pipeline.
-// Nodes are started in reverse order to ensure that
-// downstream nodes are ready to receive data from
-// upstream nodes.
-func (p *Pipeline) Start() error {
-	for i := len(p.nodes) - 1; i >= 0; i-- {
-		err := p.nodes[i].Start()
-		if err != nil {
-			p.logger.Error("Error starting pipeline node: " + err.Error())
-			return err
-		}
-		p.logger.Info("Started pipeline node: " + p.nodes[i].GetName())
-		p.wg.Add(1)
+// Send implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) Send(data K) error {
+	if p.nodeState.outChan == nil {
+		return fmt.Errorf("output channel is nil")
 	}
-	return nil
-}
 
-// Stop all of the nodes in the pipeline.
-// Nodes are stopped in order to make sure that the upstream
-// nodes are not setting data to downstream nodes.
-func (p *Pipeline) Stop() error {
-	for i := 0; i < len(p.nodes); i++ {
-		err := p.nodes[i].Stop()
-		if err != nil {
-			p.logger.Error("Error stopping pipeline node: " + err.Error())
-			return err
-		}
-		p.logger.Info("Stopped pipeline node: " + p.nodes[i].GetName())
-		p.wg.Done()
+	select {
+	case <-p.ctx.Done():
+		return p.ctx.Err()
+	case p.nodeState.outChan <- data:
+		return nil
 	}
-	return nil
 }
 
-// Restart all nodes in the pipeline.
-//
-// Note: All nodes stop and then all nodes start.
-// Each node is not handled individually.
-func (p *Pipeline) Restart() {
-	p.Stop()
-	p.Start()
+// SendError implements [ProcessorAPI].
+func (p *ProcessorAPIContext[T, K]) SendError(err error) error {
+	if p.nodeState.errChan == nil {
+		return fmt.Errorf("error channel is nil")
+	}
+	select {
+	case <-p.ctx.Done():
+		return p.ctx.Err()
+	case p.nodeState.errChan <- err:
+		return nil
+	}
 }
+
+var _ ProcessorAPI[any, any] = (*ProcessorAPIContext[any, any])(nil)
+
+type Processor[T any, K any] func(api ProcessorAPI[T, K])
