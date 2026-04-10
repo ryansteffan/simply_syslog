@@ -20,7 +20,21 @@ func main() {
 		false,
 		"Generate the configuration file from environment variables if it does not exist",
 	)
-	config.GenerateConfig(*generateConfigFromEnv)
+
+	err := config.GenerateConfig(*generateConfigFromEnv)
+	if err != nil {
+		panic(err)
+	}
+
+	err = config.GenerateRegexConfig(*generateConfigFromEnv)
+	if err != nil {
+		panic(err)
+	}
+
+	err = config.GenerateWriterConfig(*generateConfigFromEnv)
+	if err != nil {
+		panic(err)
+	}
 
 	CONFIG, err := config.GetConfig()
 	if err != nil {
@@ -47,7 +61,7 @@ func main() {
 	// TODO: Add proper data types
 	errChan := make(chan error, 10)
 	serverToParserChan := make(chan server.ServerTransferData, 1000)
-	parserToBufferChan := make(chan string, 1000)
+	parserToBufferChan := make(chan parser.ParserTransferData, 1000)
 	bufferToWriterChan := make(chan string, 1000)
 
 	// TODO: Make the server type more dynamic based on the config

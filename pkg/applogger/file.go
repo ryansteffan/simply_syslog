@@ -8,6 +8,11 @@ type FileLogger struct {
 	BufferSize int
 }
 
+// GetLogLevel implements [Logger].
+func (f *FileLogger) GetLogLevel() LogLevel {
+	panic("unimplemented")
+}
+
 // Alert implements Logger.
 func (f *FileLogger) Alert(message string) {
 	panic("unimplemented")

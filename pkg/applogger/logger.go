@@ -27,6 +27,7 @@ type Logger interface {
 	Notice(message string)
 	Info(message string)
 	Debug(message string)
+	GetLogLevel() LogLevel
 }
 
 // Creates a new Logger instance based on the specified handler type and then returns it.

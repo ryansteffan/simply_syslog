@@ -42,6 +42,13 @@ func NewConsoleLogger(facility int, config LogConfig) (*ConsoleLogger, error) {
 	}, nil
 }
 
+// GetLogLevel returns the current LogLevel of the ConsoleLogger.
+//
+// GetLogLevel implements [Logger].
+func (c *ConsoleLogger) GetLogLevel() LogLevel {
+	return c.Config.LogLevel
+}
+
 // Writes an alert message to the console with a specified message.
 //
 // Alert implements Logger.
