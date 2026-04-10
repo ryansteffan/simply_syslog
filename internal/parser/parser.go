@@ -55,10 +55,20 @@ func ParserProcessor(api pipeline.ProcessorAPI[server.ServerTransferData, Parser
 		for name, regex := range compiledRegexes {
 			if regex.Match(data.Message) {
 				logger.Debug("Message matched regex: " + name)
+
+				parseData := make(map[string]string)
+
+				match := regex.FindStringSubmatch(string(data.Message))
+				for i, name := range regex.SubexpNames() {
+					if i != 0 && name != "" {
+						parseData[name] = match[i]
+					}
+				}
+
 				api.Send(
 					ParserTransferData{
 						RawMessage: string(data.Message),
-						ParsedData: make(map[string]string), // TODO: Fill this with the actual parsed data from the regex groups
+						ParsedData: parseData,
 						Meta: map[string]string{
 							"protocol": data.Meta["protocol"],
 							"regex":    name,

@@ -1,10 +1,18 @@
 package drivers
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ryansteffan/simply_syslog/internal/buffer"
 	"github.com/ryansteffan/simply_syslog/internal/config"
+)
+
+type ConsoleFormats string
+
+const (
+	ConsoleFormatRaw  ConsoleFormats = "raw"
+	ConsoleFormatJSON ConsoleFormats = "json"
 )
 
 type ConsoleWriter struct {
@@ -45,9 +53,26 @@ func (c *ConsoleWriter) Setup(config config.Writer) error {
 
 // Write implements [Driver].
 func (c *ConsoleWriter) Write(data buffer.BufferTransferData) error {
-	if c.Options.Format == "raw" {
+	switch ConsoleFormats(c.Options.Format) {
+
+	case ConsoleFormatRaw:
 		fmt.Println(data.RawMessage)
+
+	case ConsoleFormatJSON:
+		output := make(map[string]interface{})
+		for key, value := range data.ParsedData {
+			output[key] = value
+		}
+		jsonBytes, err := json.Marshal(output)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+		fmt.Println(string(jsonBytes))
+
+	default:
+		return fmt.Errorf("invalid console format: %s", c.Options.Format)
 	}
+
 	return nil
 }
 
