@@ -62,7 +62,7 @@ func main() {
 	errChan := make(chan error, 10)
 	serverToParserChan := make(chan server.ServerTransferData, 1000)
 	parserToBufferChan := make(chan parser.ParserTransferData, 1000)
-	bufferToWriterChan := make(chan string, 1000)
+	bufferToWriterChan := make(chan buffer.BufferTransferData, 1000)
 
 	// TODO: Make the server type more dynamic based on the config
 	serverType := CONFIG.ServerMode

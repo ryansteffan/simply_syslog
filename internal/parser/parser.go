@@ -2,6 +2,7 @@ package parser
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
@@ -24,9 +25,7 @@ func ParserProcessor(api pipeline.ProcessorAPI[server.ServerTransferData, Parser
 	}
 
 	if logger.GetLogLevel() <= applogger.DEBUG {
-		for _, value := range regexConfig.Regexes {
-			logger.Debug("Loaded Regex -> Name: " + value.Name + " Pattern: " + value.Pattern)
-		}
+		logger.Debug(fmt.Sprintf("regexConfig: %v\n", regexConfig))
 	}
 
 	logger.Info("loaded regex patterns")

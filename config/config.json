@@ -5,5 +5,5 @@
 	"udp_port": "514",
 	"tcp_port": "514",
 	"tls_port": "6514",
-	"self_logging_level": 7
+	"self_logging_level": 6
 }

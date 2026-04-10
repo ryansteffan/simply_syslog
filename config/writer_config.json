@@ -1,26 +1,12 @@
 {
-  "version": "1.0.0",
-  "writers": [
-    {
-      "name": "console",
-      "enabled": true,
-      "options": {
-        "format": "plain"
-      }
-    },
-    {
-      "name": "file",
-      "enabled": false,
-      "options": {
-        "path": "./logs/app.log"
-      }
-    },
-    {
-      "name": "sqlite",
-      "enabled": false,
-      "options": {
-        "path": "/syslog/syslog.db"
-      }
-    }
-  ]
+	"version": "1.0.0",
+	"writers": [
+		{
+			"name": "console",
+			"enabled": true,
+			"options": {
+				"format": "raw"
+			}
+		}
+	]
 }

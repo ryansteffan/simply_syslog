@@ -7,7 +7,13 @@ import (
 	"github.com/ryansteffan/simply_syslog/internal/pipeline"
 )
 
-func BufferProcessor(api pipeline.ProcessorAPI[parser.ParserTransferData, string]) {
+type BufferTransferData struct {
+	RawMessage string
+	ParsedData map[string]string
+	Meta       map[string]string
+}
+
+func BufferProcessor(api pipeline.ProcessorAPI[parser.ParserTransferData, BufferTransferData]) {
 	logger := api.GetNodeLogger()
 	logger.Info("Buffer processor started")
 	for {
@@ -18,6 +24,10 @@ func BufferProcessor(api pipeline.ProcessorAPI[parser.ParserTransferData, string
 		}
 		logger.Debug("Buffering message: " + data.RawMessage)
 		// TODO: Add buffering logic here, for now pass through this node.
-		api.Send(data.RawMessage)
+		api.Send(BufferTransferData{
+			RawMessage: data.RawMessage,
+			ParsedData: data.ParsedData,
+			Meta:       data.Meta,
+		})
 	}
 }
