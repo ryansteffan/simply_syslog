@@ -1,4 +1,4 @@
-FROM golang:trixie AS builder
+FROM golang:tip-alpine AS builder
 
 WORKDIR /src
 
@@ -6,7 +6,7 @@ COPY . .
 
 RUN go mod download
 
-RUN CGO_ENABLED=0 go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
+RUN CGO_ENABLED=1 go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
 
 
 FROM scratch AS runner

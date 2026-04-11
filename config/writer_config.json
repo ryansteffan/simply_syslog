@@ -7,6 +7,20 @@
 			"options": {
 				"format": "raw"
 			}
+		},
+		{
+			"name": "file",
+			"enabled": true,
+			"options": {
+				"path": "./logs/app.log"
+			}
+		},
+		{
+			"name": "duckdb",
+			"enabled": true,
+			"options": {
+				"path": "/syslog/syslog.db"
+			}
 		}
 	]
 }

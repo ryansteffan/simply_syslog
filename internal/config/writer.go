@@ -29,7 +29,7 @@ var defaultWriterConfig = &WriterConfig{
 			Name:    "console",
 			Enabled: true,
 			Options: map[string]string{
-				"format": "plain",
+				"format": "raw",
 			},
 		},
 		{

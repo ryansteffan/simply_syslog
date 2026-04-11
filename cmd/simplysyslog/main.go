@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"os"
 
 	"github.com/ryansteffan/simply_syslog/internal/buffer"
 	"github.com/ryansteffan/simply_syslog/internal/config"
@@ -20,6 +21,14 @@ func main() {
 		false,
 		"Generate the configuration file from environment variables if it does not exist",
 	)
+
+	// Ensure that the config directory exists and generate the configs if required.
+	if _, err := os.Stat("./config"); os.IsNotExist(err) {
+		err := os.Mkdir("./config", 0755)
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	err := config.GenerateConfig(*generateConfigFromEnv)
 	if err != nil {

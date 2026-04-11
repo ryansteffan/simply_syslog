@@ -21,16 +21,16 @@ func WriterProcessor(api pipeline.ProcessorAPI[buffer.BufferTransferData, any]) 
 		logger.Debug(fmt.Sprintf("writerConfig: %v\n", writerConfig))
 	}
 
-	for _, writer := range writerConfig.Writers {
-		// Setup each of the writers
-		drivers.GetRegisteredWriters()[writer.Name].Setup(writer)
-		logger.Info(fmt.Sprintf("enabled writer: %s", writer.Name))
-	}
-
-	enabledWriters := make(map[string]drivers.Driver)
-	for _, writer := range writerConfig.Writers {
-		if drivers.GetRegisteredWriters()[writer.Name].IsEnabled() {
-			enabledWriters[writer.Name] = drivers.GetRegisteredWriters()[writer.Name]
+	for name, Writer := range drivers.GetRegisteredWriters() {
+		for _, config := range writerConfig.Writers {
+			if config.Name == name {
+				err := Writer.Setup(config)
+				if err != nil {
+					logger.Error(fmt.Sprintf("Error setting up writer %s: %v\n", name, err))
+				} else {
+					logger.Info(fmt.Sprintf("Writer %s set up successfully\n", name))
+				}
+			}
 		}
 	}
 
@@ -38,11 +38,16 @@ func WriterProcessor(api pipeline.ProcessorAPI[buffer.BufferTransferData, any]) 
 		data, ok := api.Receive()
 		if !ok {
 			api.SendError(fmt.Errorf("an error receiving messages in the writer took place"))
-			return
+			continue
+		}
+		for name, Writer := range drivers.GetRegisteredWriters() {
+			if Writer.IsEnabled() {
+				err := Writer.Write(data)
+				if err != nil {
+					logger.Error(fmt.Sprintf("Error writing message with writer %s: %v\n", name, err))
+				}
+			}
 		}
 		logger.Debug("Writing message: " + data.RawMessage)
-		for _, writer := range enabledWriters {
-			writer.Write(data)
-		}
 	}
 }

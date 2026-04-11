@@ -14,6 +14,8 @@ type Driver interface {
 
 var registeredWriters = map[string]Driver{
 	"console": NewConsoleWriter(),
+	"file":    NewFileWriter(),
+	"duckdb":  NewDuckDBWriter(),
 }
 
 func GetRegisteredWriters() map[string]Driver {

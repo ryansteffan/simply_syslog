@@ -17,12 +17,23 @@ type RegexPattern struct {
 }
 
 type RegexConfig struct {
-	Version string         `json:"version"`
-	Regexes []RegexPattern `json:"regexes"`
+	Version   string            `json:"version"`
+	DBMapping map[string]string `json:"db_mapping"`
+	Regexes   []RegexPattern    `json:"regexes"`
 }
 
 var defaultRegexConfig = &RegexConfig{
 	Version: "1.0.0",
+	DBMapping: map[string]string{
+		"pri":       "priority",
+		"timestamp": "timestamp",
+		"hostname":  "hostname",
+		"message":   "message",
+		"version":   "version",
+		"appname":   "app_name",
+		"procid":    "proc_id",
+		"msgid":     "msg_id",
+	},
 	Regexes: []RegexPattern{
 		{
 			Name:    "RFC3164",
