@@ -18,10 +18,24 @@ import (
 func main() {
 	// TODO: Add a more robust flag system.
 	generateConfigFromEnv := flag.Bool(
-		"env-gen",
+		"env-gen-config",
 		false,
 		"Generate the configuration file from environment variables if it does not exist",
 	)
+
+	generateRegexFromEnv := flag.Bool(
+		"env-gen-regex",
+		false,
+		"Generate the regex configuration file from environment variables if it does not exist",
+	)
+
+	generateWriterConfigFromEnv := flag.Bool(
+		"env-gen-writer-config",
+		false,
+		"Generate the writer configuration file from environment variables if it does not exist",
+	)
+
+	flag.Parse()
 
 	// Ensure that the config directory exists and generate the configs if required.
 	if _, err := os.Stat("./config"); os.IsNotExist(err) {
@@ -36,12 +50,12 @@ func main() {
 		panic(err)
 	}
 
-	err = config.GenerateRegexConfig(*generateConfigFromEnv)
+	err = config.GenerateRegexConfig(*generateRegexFromEnv)
 	if err != nil {
 		panic(err)
 	}
 
-	err = config.GenerateWriterConfig(*generateConfigFromEnv)
+	err = config.GenerateWriterConfig(*generateWriterConfigFromEnv)
 	if err != nil {
 		panic(err)
 	}

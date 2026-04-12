@@ -2,7 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/ryansteffan/simply_syslog/pkg/applogger"
@@ -132,13 +134,19 @@ func GenerateConfig(fromENV bool) error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		if fromENV {
 			// Make the initial config from the environment variables
+			logLevelEnv := os.Getenv("SELF_LOGGING_LEVEL")
+			logLevelInt, err := strconv.Atoi(logLevelEnv)
+			if err != nil {
+				return errors.New("invalid SELF_LOGGING_LEVEL environment variable")
+			}
 			globalConfig = &Config{
-				Version:     "1.0.0",
-				ServerMode:  ServerMode(os.Getenv("SERVER_MODE")),
-				BindAddress: os.Getenv("BIND_ADDRESS"),
-				UDPPort:     os.Getenv("UDP_PORT"),
-				TCPPort:     os.Getenv("TCP_PORT"),
-				TLSPort:     os.Getenv("TLS_PORT"),
+				Version:          "1.0.0",
+				ServerMode:       ServerMode(os.Getenv("SERVER_MODE")),
+				BindAddress:      os.Getenv("BIND_ADDRESS"),
+				UDPPort:          os.Getenv("UDP_PORT"),
+				TCPPort:          os.Getenv("TCP_PORT"),
+				TLSPort:          os.Getenv("TLS_PORT"),
+				SelfLoggingLevel: applogger.LogLevel(logLevelInt),
 			}
 			return SaveConfig(globalConfig)
 		} else {

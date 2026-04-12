@@ -34,7 +34,7 @@ var defaultWriterConfig = &WriterConfig{
 		},
 		{
 			Name:    "file",
-			Enabled: false,
+			Enabled: true,
 			Options: map[string]string{
 				"path": "./logs/app.log",
 			},

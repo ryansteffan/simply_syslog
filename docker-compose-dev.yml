@@ -3,6 +3,8 @@ services:
     image: simply_syslog:latest
     container_name: simply_syslog
     restart: always
+    build:
+      context: .
     ports:
       - "514:514/udp"
       - "514:514/tcp"
