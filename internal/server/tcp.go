@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
@@ -25,12 +26,14 @@ func TCPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 	}
 
 	logger.Info("TCP server started on " + CONFIG.BindAddress + ":" + CONFIG.TCPPort)
+	logger.Debug(fmt.Sprintf("TCP listener ready on %s", listener.Addr()))
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
 			api.SendError(err)
 			continue
 		}
+		logger.Debug(fmt.Sprintf("accepted TCP connection from %s", conn.RemoteAddr()))
 
 		api.GetNodeWaitGroup().Add(1)
 		go func() {
@@ -44,7 +47,7 @@ func TCPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 				}
 				data := make([]byte, n)
 				copy(data, buffer[:n])
-				logger.Debug("Received TCP message: " + string(data))
+				logger.Debug(fmt.Sprintf("received TCP message from %s with %d byte(s)", conn.RemoteAddr(), len(data)))
 				api.Send(
 					ServerTransferData{
 						Message: data,

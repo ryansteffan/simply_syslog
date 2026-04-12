@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/ryansteffan/simply_syslog/internal/buffer"
@@ -61,11 +62,22 @@ func main() {
 		panic(err)
 	}
 
+	logger.Debug(fmt.Sprintf(
+		"loaded config: server_mode=%s bind_address=%s udp_port=%s tcp_port=%s tls_port=%s self_logging_level=%d",
+		CONFIG.ServerMode,
+		CONFIG.BindAddress,
+		CONFIG.UDPPort,
+		CONFIG.TCPPort,
+		CONFIG.TLSPort,
+		CONFIG.SelfLoggingLevel,
+	))
+
 	logger.Info("starting syslog server")
 
 	pl := pipeline.NewPipeline(context.Background(), logger)
 
 	logger.Debug("created pipeline instance")
+	logger.Debug("initializing pipeline channels")
 
 	// TODO: Add proper data types
 	errChan := make(chan error, 10)
@@ -75,6 +87,7 @@ func main() {
 
 	// TODO: Make the server type more dynamic based on the config
 	serverType := CONFIG.ServerMode
+	logger.Debug(fmt.Sprintf("selecting server node for mode %s", serverType))
 
 	var serverNode pipeline.Node
 	switch serverType {
@@ -150,6 +163,8 @@ func main() {
 		panic(err)
 	}
 
+	logger.Debug("pipeline start returned successfully")
+
 	// Create a error channel sink
 	go func() {
 		for err := range errChan {
@@ -160,4 +175,5 @@ func main() {
 	logger.Info("pipeline started successfully")
 
 	pl.Wait()
+	logger.Debug("pipeline wait completed")
 }

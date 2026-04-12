@@ -46,7 +46,7 @@ func (f *FileWriter) Setup(config config.Writer) error {
 
 	// Create the log file if it does not exist.
 	if _, err := os.Stat(f.Options.Path); os.IsNotExist(err) {
-		err := os.MkdirAll(filepath.Dir(f.Options.Path), 0755)
+		err := os.MkdirAll(filepath.Dir(f.Options.Path), 0644)
 		if err != nil {
 			return err
 		}
@@ -69,9 +69,11 @@ func (f *FileWriter) Write(data buffer.BufferTransferData) error {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(data.RawMessage + "\n")
-	if err != nil {
-		return err
+	for _, message := range data.RawMessage {
+		_, err := file.WriteString(message + "\n")
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

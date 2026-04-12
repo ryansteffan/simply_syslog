@@ -60,6 +60,9 @@ func (p *Pipeline) AddNode(node Node) error {
 	if p.state != Stopped {
 		return fmt.Errorf("cannot add node: pipeline is not stopped")
 	}
+	if p.Logger != nil {
+		p.Logger.Debug(fmt.Sprintf("adding node %s to pipeline", node.GetName()))
+	}
 	node.setParentPipeline(p)
 	p.Nodes = append(p.Nodes, node)
 	return nil
@@ -86,8 +89,15 @@ func (p *Pipeline) Start() error {
 	copy(nodes, p.Nodes)
 	p.mutex.Unlock()
 
+	if p.Logger != nil {
+		p.Logger.Debug(fmt.Sprintf("starting pipeline with %d node(s)", len(nodes)))
+	}
+
 	startedNodes := make([]Node, 0)
 	for _, node := range nodes {
+		if p.Logger != nil {
+			p.Logger.Debug(fmt.Sprintf("starting node %s", node.GetName()))
+		}
 		if err := node.Start(); err != nil {
 			// If starting a node fails, stop all previously started nodes
 			for _, startedNode := range startedNodes {
@@ -104,11 +114,18 @@ func (p *Pipeline) Start() error {
 			return fmt.Errorf("failed to start node %s: %w", node.GetName(), err)
 		}
 		startedNodes = append(startedNodes, node)
+		if p.Logger != nil {
+			p.Logger.Debug(fmt.Sprintf("started node %s", node.GetName()))
+		}
 	}
 
 	p.mutex.Lock()
 	p.state = Running
 	p.mutex.Unlock()
+
+	if p.Logger != nil {
+		p.Logger.Debug("pipeline state changed to running")
+	}
 
 	return nil
 }
@@ -138,9 +155,16 @@ func (p *Pipeline) Stop() error {
 	copy(nodes, p.Nodes)
 	p.mutex.Unlock()
 
+	if p.Logger != nil {
+		p.Logger.Debug(fmt.Sprintf("stopping pipeline with %d node(s)", len(nodes)))
+	}
+
 	var stopErrs []error
 	for nodeIndex := len(nodes) - 1; nodeIndex >= 0; nodeIndex-- {
 		node := nodes[nodeIndex]
+		if p.Logger != nil {
+			p.Logger.Debug(fmt.Sprintf("stopping node %s", node.GetName()))
+		}
 		if err := node.Stop(); err != nil {
 			stopErrs = append(stopErrs, fmt.Errorf("failed to stop node %s: %w", node.GetName(), err))
 		}
@@ -155,6 +179,10 @@ func (p *Pipeline) Stop() error {
 	}
 
 	p.mutex.Unlock()
+
+	if p.Logger != nil {
+		p.Logger.Debug("pipeline state changed to stopped")
+	}
 
 	if len(stopErrs) > 0 {
 		return fmt.Errorf("errors occurred while stopping nodes: %v", stopErrs)
@@ -265,6 +293,7 @@ func (p *PipelineNode[T, K]) Start() error {
 	}
 
 	p.state = Starting
+	p.logger.Debug(fmt.Sprintf("node %s transitioning to starting", p.name))
 
 	if p.parent == nil {
 		p.logger.Error("node not attached to pipeline, context derived from background")
@@ -285,12 +314,14 @@ func (p *PipelineNode[T, K]) Start() error {
 			p.mutex.Lock()
 			p.state = Stopped
 			p.mutex.Unlock()
+			p.logger.Debug(fmt.Sprintf("node %s transitioned to stopped", p.name))
 			p.wg.Done()
 		}()
 		if p.process == nil {
 			p.logger.Error("no process function defined for node")
 			return
 		}
+		p.logger.Debug(fmt.Sprintf("node %s executing processor", p.name))
 		p.process(&ProcessorAPIContext[T, K]{
 			nodeState: p,
 			ctx:       ctx,
@@ -299,6 +330,7 @@ func (p *PipelineNode[T, K]) Start() error {
 	}()
 
 	p.state = Running
+	p.logger.Debug(fmt.Sprintf("node %s transitioned to running", p.name))
 
 	return nil
 }
@@ -326,6 +358,7 @@ func (p *PipelineNode[T, K]) Stop() error {
 	p.state = Stopping
 	cancel := p.nodeCancelFunc
 	p.mutex.Unlock()
+	p.logger.Debug(fmt.Sprintf("node %s transitioning to stopping", p.name))
 
 	if cancel != nil {
 		cancel()
@@ -335,6 +368,7 @@ func (p *PipelineNode[T, K]) Stop() error {
 	p.mutex.Lock()
 	p.state = Stopped
 	p.mutex.Unlock()
+	p.logger.Debug(fmt.Sprintf("node %s stop completed", p.name))
 
 	return nil
 }

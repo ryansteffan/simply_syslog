@@ -13,7 +13,7 @@ tasks:
     desc: Run the application using the go run command and the config.json.
     cmds:
       - echo Running the application...
-      - go run $CMD_PATH
+      - sudo go run $CMD_PATH
     vars:
       CGO_ENABLED: 1
     silent: true

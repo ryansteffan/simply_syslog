@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
@@ -32,6 +33,7 @@ func UDPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 
 	buffer := make([]byte, 1024)
 	logger.Info("UDP server started on " + CONFIG.BindAddress + ":" + CONFIG.UDPPort)
+	logger.Debug(fmt.Sprintf("UDP listener ready on %s", conn.LocalAddr()))
 	for {
 		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
@@ -41,7 +43,7 @@ func UDPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 
 		message := make([]byte, n)
 		copy(message, buffer[:n])
-		logger.Debug("Received UDP message: " + string(message))
+		logger.Debug(fmt.Sprintf("received UDP message with %d byte(s)", len(message)))
 		api.Send(
 			ServerTransferData{
 				Message: message,

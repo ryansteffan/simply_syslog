@@ -56,12 +56,16 @@ func (c *ConsoleWriter) Write(data buffer.BufferTransferData) error {
 	switch ConsoleFormats(c.Options.Format) {
 
 	case ConsoleFormatRaw:
-		fmt.Println(data.RawMessage)
+		for _, rawMsg := range data.RawMessage {
+			fmt.Println(rawMsg)
+		}
 
 	case ConsoleFormatJSON:
 		output := make(map[string]interface{})
-		for key, value := range data.ParsedData {
-			output[key] = value
+		for _, parsedData := range data.ParsedData {
+			for key, value := range parsedData {
+				output[key] = value
+			}
 		}
 		jsonBytes, err := json.Marshal(output)
 		if err != nil {

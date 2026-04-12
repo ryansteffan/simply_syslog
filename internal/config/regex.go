@@ -17,31 +17,20 @@ type RegexPattern struct {
 }
 
 type RegexConfig struct {
-	Version   string            `json:"version"`
-	DBMapping map[string]string `json:"db_mapping"`
-	Regexes   []RegexPattern    `json:"regexes"`
+	Version string         `json:"version"`
+	Regexes []RegexPattern `json:"regexes"`
 }
 
 var defaultRegexConfig = &RegexConfig{
 	Version: "1.0.0",
-	DBMapping: map[string]string{
-		"pri":       "priority",
-		"timestamp": "timestamp",
-		"hostname":  "hostname",
-		"message":   "message",
-		"version":   "version",
-		"appname":   "app_name",
-		"procid":    "proc_id",
-		"msgid":     "msg_id",
-	},
 	Regexes: []RegexPattern{
 		{
 			Name:    "RFC3164",
-			Pattern: `<(?P<pri>\d{1,3})>(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<hostname>[\w\.\-]+)\s+(?P<message>.+)`,
+			Pattern: `<(?P<priority>\d{1,3})>(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<hostname>[\w\.\-]+)\s+(?P<message>.+)`,
 		},
 		{
 			Name:    "RFC5424",
-			Pattern: `<(?P<pri>\d{1,3})>(?P<version>\d{1,2})\s+(?P<timestamp>[\w\-\:\.]+)\s+(?P<hostname>[\w\.\-]+)\s+(?P<appname>[\w\.\-]+)\s+(?P<procid>[\w\.\-]+)\s+(?P<msgid>[\w\.\-]+)\s+(?P<message>.+)`,
+			Pattern: `<(?P<priority>\d{1,3})>(?P<version>\d{1,2})\s+(?P<timestamp>[\w\-\:\.]+)\s+(?P<hostname>[\w\.\-]+)\s+(?P<app_name>[\w\.\-]+)\s+(?P<proc_id>[\w\.\-]+)\s+(?P<msg_id>[\w\.\-]+)\s+(?P<message>.+)`,
 		},
 	},
 }

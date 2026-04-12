@@ -40,7 +40,7 @@ var defaultWriterConfig = &WriterConfig{
 			},
 		},
 		{
-			Name:    "sqlite",
+			Name:    "duckdb",
 			Enabled: false,
 			Options: map[string]string{
 				"path": "/syslog/syslog.db",
