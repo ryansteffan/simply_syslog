@@ -388,6 +388,8 @@ type ProcessorAPI[T any, K any] interface {
 	GetNodeCancelFunc() context.CancelFunc
 	GetParentPipeline() *Pipeline
 	GetNodeWaitGroup() *sync.WaitGroup
+	GetInputChannel() <-chan T
+	GetOutputChannel() chan<- K
 	Send(data K) error
 	SendError(err error) error
 	Receive() (data T, ok bool)
@@ -433,6 +435,14 @@ func (p *ProcessorAPIContext[T, K]) GetNodeState() RunnerState {
 	p.nodeState.mutex.Lock()
 	defer p.nodeState.mutex.Unlock()
 	return p.nodeState.state
+}
+
+func (p *ProcessorAPIContext[T, K]) GetInputChannel() <-chan T {
+	return p.nodeState.inChan
+}
+
+func (p *ProcessorAPIContext[T, K]) GetOutputChannel() chan<- K {
+	return p.nodeState.outChan
 }
 
 // Receive implements [ProcessorAPI].

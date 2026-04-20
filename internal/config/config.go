@@ -40,24 +40,28 @@ const (
 
 // Config defines the configuration for the syslog server.
 type Config struct {
-	Version          string             `json:"version"`
-	ServerMode       ServerMode         `json:"server_mode"`
-	BindAddress      string             `json:"bind_address"`
-	UDPPort          string             `json:"udp_port"`
-	TCPPort          string             `json:"tcp_port"`
-	TLSPort          string             `json:"tls_port"`
-	SelfLoggingLevel applogger.LogLevel `json:"self_logging_level"`
+	Version           string             `json:"version"`
+	ServerMode        ServerMode         `json:"server_mode"`
+	BindAddress       string             `json:"bind_address"`
+	UDPPort           string             `json:"udp_port"`
+	TCPPort           string             `json:"tcp_port"`
+	TLSPort           string             `json:"tls_port"`
+	SelfLoggingLevel  applogger.LogLevel `json:"self_logging_level"`
+	BufferMaxItems    int                `json:"buffer_max_items"`
+	BufferMaxLifetime int                `json:"buffer_max_lifetime"`
 }
 
 // The default config that should be generated.
 var defaultConfig = &Config{
-	Version:          "1.0.0",
-	ServerMode:       ServerModeUDP,
-	BindAddress:      "0.0.0.0",
-	UDPPort:          "514",
-	TCPPort:          "514",
-	TLSPort:          "6514",
-	SelfLoggingLevel: applogger.DEBUG,
+	Version:           "1.0.0",
+	ServerMode:        ServerModeUDP,
+	BindAddress:       "0.0.0.0",
+	UDPPort:           "514",
+	TCPPort:           "514",
+	TLSPort:           "6514",
+	SelfLoggingLevel:  applogger.DEBUG,
+	BufferMaxItems:    1024,
+	BufferMaxLifetime: 15,
 }
 
 // SaveConfig saves the configuration to the file system and updates the globalConfig variable
@@ -147,6 +151,25 @@ func GenerateConfig(fromENV bool) error {
 				TCPPort:          os.Getenv("TCP_PORT"),
 				TLSPort:          os.Getenv("TLS_PORT"),
 				SelfLoggingLevel: applogger.LogLevel(logLevelInt),
+
+				// Parse out the max items
+				BufferMaxItems: func() int {
+					itemsEnv := os.Getenv("BUFFER_MAX_ITEMS")
+					itemsInt, err := strconv.Atoi(itemsEnv)
+					if err != nil {
+						return defaultConfig.BufferMaxItems
+					}
+					return itemsInt
+				}(),
+				// Parse out the max lifetime
+				BufferMaxLifetime: func() int {
+					lifetimeEnv := os.Getenv("BUFFER_MAX_LIFETIME")
+					lifetimeInt, err := strconv.Atoi(lifetimeEnv)
+					if err != nil {
+						return defaultConfig.BufferMaxLifetime
+					}
+					return lifetimeInt
+				}(),
 			}
 			return SaveConfig(globalConfig)
 		} else {
