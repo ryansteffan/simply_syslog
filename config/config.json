@@ -1,9 +1,0 @@
-{
-  "version": "1.0.0",
-  "server_mode": "udp",
-  "bind_address": "0.0.0.0",
-  "udp_port": "514",
-  "tcp_port": "514",
-  "tls_port": "6514",
-  "self_logging_level": 7
-}
