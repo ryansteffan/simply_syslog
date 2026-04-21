@@ -48,41 +48,47 @@ func ParserProcessor(api pipeline.ProcessorAPI[server.ServerTransferData, Parser
 	logger.Info("compiled regex patterns")
 
 	for {
-		data, ok := api.Receive()
-		if !ok {
-			api.SendError(errors.New("an error receiving messages in the parser took place"))
+		select {
+		case <-api.GetNodeContext().Done():
+			logger.Info("shutting down parser")
 			return
-		}
-		logger.Debug(fmt.Sprintf("parsing message from %s with %d byte(s)", data.Meta["protocol"], len(data.Message)))
-		matched := false
-		for name, regex := range compiledRegexes {
-			if regex.Match(data.Message) {
-				matched = true
-				logger.Debug("Message matched regex: " + name)
-
-				parseData := make(map[string]string)
-
-				match := regex.FindStringSubmatch(string(data.Message))
-				for i, name := range regex.SubexpNames() {
-					if i != 0 && name != "" {
-						parseData[name] = match[i]
-					}
-				}
-
-				api.Send(
-					ParserTransferData{
-						RawMessage: string(data.Message),
-						ParsedData: parseData,
-						Meta: map[string]string{
-							"protocol": data.Meta["protocol"],
-							"regex":    name,
-						},
-					},
-				)
+		default:
+			data, ok := api.Receive()
+			if !ok {
+				api.SendError(errors.New("an error receiving messages in the parser took place"))
+				return
 			}
-		}
-		if !matched {
-			logger.Debug("message did not match any configured regex")
+			logger.Debug(fmt.Sprintf("parsing message from %s with %d byte(s)", data.Meta["protocol"], len(data.Message)))
+			matched := false
+			for name, regex := range compiledRegexes {
+				if regex.Match(data.Message) {
+					matched = true
+					logger.Debug("Message matched regex: " + name)
+
+					parseData := make(map[string]string)
+
+					match := regex.FindStringSubmatch(string(data.Message))
+					for i, name := range regex.SubexpNames() {
+						if i != 0 && name != "" {
+							parseData[name] = match[i]
+						}
+					}
+
+					api.Send(
+						ParserTransferData{
+							RawMessage: string(data.Message),
+							ParsedData: parseData,
+							Meta: map[string]string{
+								"protocol": data.Meta["protocol"],
+								"regex":    name,
+							},
+						},
+					)
+				}
+			}
+			if !matched {
+				logger.Debug("message did not match any configured regex")
+			}
 		}
 	}
 }

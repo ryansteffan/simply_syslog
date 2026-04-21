@@ -38,14 +38,19 @@ const (
 	ServerModeAll ServerMode = "all"
 )
 
+type SocketServerConfig struct {
+	Enabled        bool   `json:"enabled"`
+	Port           string `json:"port"`
+	BindAddress    string `json:"bind_address"`
+	MaxMessageSize int    `json:"max_message_size,omitempty"`
+}
+
 // Config defines the configuration for the syslog server.
 type Config struct {
 	Version           string             `json:"version"`
-	ServerMode        ServerMode         `json:"server_mode"`
-	BindAddress       string             `json:"bind_address"`
-	UDPPort           string             `json:"udp_port"`
-	TCPPort           string             `json:"tcp_port"`
-	TLSPort           string             `json:"tls_port"`
+	UDPServer         SocketServerConfig `json:"udp_server"`
+	TCPServer         SocketServerConfig `json:"tcp_server"`
+	TLSServer         SocketServerConfig `json:"tls_server"`
 	SelfLoggingLevel  applogger.LogLevel `json:"self_logging_level"`
 	BufferMaxItems    int                `json:"buffer_max_items"`
 	BufferMaxLifetime int                `json:"buffer_max_lifetime"`
@@ -53,12 +58,25 @@ type Config struct {
 
 // The default config that should be generated.
 var defaultConfig = &Config{
-	Version:           "1.0.0",
-	ServerMode:        ServerModeUDP,
-	BindAddress:       "0.0.0.0",
-	UDPPort:           "514",
-	TCPPort:           "514",
-	TLSPort:           "6514",
+	Version: "1.0.0",
+	UDPServer: SocketServerConfig{
+		Enabled:        true,
+		Port:           "514",
+		BindAddress:    "0.0.0.0",
+		MaxMessageSize: 1024,
+	},
+	TCPServer: SocketServerConfig{
+		Enabled:        true,
+		Port:           "514",
+		BindAddress:    "0.0.0.0",
+		MaxMessageSize: 1024,
+	},
+	TLSServer: SocketServerConfig{
+		Enabled:        true,
+		Port:           "6514",
+		BindAddress:    "0.0.0.0",
+		MaxMessageSize: 1024,
+	},
 	SelfLoggingLevel:  applogger.DEBUG,
 	BufferMaxItems:    1024,
 	BufferMaxLifetime: 15,
@@ -143,16 +161,75 @@ func GenerateConfig(fromENV bool) error {
 			if err != nil {
 				return errors.New("invalid SELF_LOGGING_LEVEL environment variable")
 			}
+
 			globalConfig = &Config{
-				Version:          "1.0.0",
-				ServerMode:       ServerMode(os.Getenv("SERVER_MODE")),
-				BindAddress:      os.Getenv("BIND_ADDRESS"),
-				UDPPort:          os.Getenv("UDP_PORT"),
-				TCPPort:          os.Getenv("TCP_PORT"),
-				TLSPort:          os.Getenv("TLS_PORT"),
+				Version: "1.0.0",
+
+				UDPServer: SocketServerConfig{
+					Enabled: func() bool {
+						udpEnabledEnv := os.Getenv("UDP_SERVER_ENABLED")
+						udpEnabled, err := strconv.ParseBool(udpEnabledEnv)
+						if err != nil {
+							return defaultConfig.UDPServer.Enabled
+						}
+						return udpEnabled
+					}(),
+					Port:        os.Getenv("UDP_PORT"),
+					BindAddress: os.Getenv("UDP_BIND_ADDRESS"),
+					MaxMessageSize: func() int {
+						sizeEnv := os.Getenv("UDP_MAX_MESSAGE_SIZE")
+						sizeInt, err := strconv.Atoi(sizeEnv)
+						if err != nil {
+							return defaultConfig.UDPServer.MaxMessageSize
+						}
+						return sizeInt
+					}(),
+				},
+
+				TCPServer: SocketServerConfig{
+					Enabled: func() bool {
+						tcpEnabledEnv := os.Getenv("TCP_SERVER_ENABLED")
+						tcpEnabled, err := strconv.ParseBool(tcpEnabledEnv)
+						if err != nil {
+							return defaultConfig.TCPServer.Enabled
+						}
+						return tcpEnabled
+					}(),
+					Port:        os.Getenv("TCP_PORT"),
+					BindAddress: os.Getenv("TCP_BIND_ADDRESS"),
+					MaxMessageSize: func() int {
+						sizeEnv := os.Getenv("TCP_MAX_MESSAGE_SIZE")
+						sizeInt, err := strconv.Atoi(sizeEnv)
+						if err != nil {
+							return defaultConfig.TCPServer.MaxMessageSize
+						}
+						return sizeInt
+					}(),
+				},
+
+				TLSServer: SocketServerConfig{
+					Enabled: func() bool {
+						tlsEnabledEnv := os.Getenv("TLS_SERVER_ENABLED")
+						tlsEnabled, err := strconv.ParseBool(tlsEnabledEnv)
+						if err != nil {
+							return defaultConfig.TLSServer.Enabled
+						}
+						return tlsEnabled
+					}(),
+					Port:        os.Getenv("TLS_PORT"),
+					BindAddress: os.Getenv("TLS_BIND_ADDRESS"),
+					MaxMessageSize: func() int {
+						sizeEnv := os.Getenv("TLS_MAX_MESSAGE_SIZE")
+						sizeInt, err := strconv.Atoi(sizeEnv)
+						if err != nil {
+							return defaultConfig.TLSServer.MaxMessageSize
+						}
+						return sizeInt
+					}(),
+				},
+
 				SelfLoggingLevel: applogger.LogLevel(logLevelInt),
 
-				// Parse out the max items
 				BufferMaxItems: func() int {
 					itemsEnv := os.Getenv("BUFFER_MAX_ITEMS")
 					itemsInt, err := strconv.Atoi(itemsEnv)
@@ -161,7 +238,7 @@ func GenerateConfig(fromENV bool) error {
 					}
 					return itemsInt
 				}(),
-				// Parse out the max lifetime
+
 				BufferMaxLifetime: func() int {
 					lifetimeEnv := os.Getenv("BUFFER_MAX_LIFETIME")
 					lifetimeInt, err := strconv.Atoi(lifetimeEnv)

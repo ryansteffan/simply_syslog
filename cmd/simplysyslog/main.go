@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ryansteffan/simply_syslog/internal/buffer"
 	"github.com/ryansteffan/simply_syslog/internal/config"
@@ -77,12 +79,13 @@ func main() {
 	}
 
 	logger.Debug(fmt.Sprintf(
-		"loaded config: server_mode=%s bind_address=%s udp_port=%s tcp_port=%s tls_port=%s self_logging_level=%d",
-		CONFIG.ServerMode,
-		CONFIG.BindAddress,
-		CONFIG.UDPPort,
-		CONFIG.TCPPort,
-		CONFIG.TLSPort,
+		"loaded config: udp_bind_address=%s udp_port=%s tcp_bind_address=%s tcp_port=%s tls_bind_address=%s tls_port=%s self_logging_level=%d",
+		CONFIG.UDPServer.BindAddress,
+		CONFIG.UDPServer.Port,
+		CONFIG.TCPServer.BindAddress,
+		CONFIG.TCPServer.Port,
+		CONFIG.TLSServer.BindAddress,
+		CONFIG.TLSServer.Port,
 		CONFIG.SelfLoggingLevel,
 	))
 
@@ -93,20 +96,19 @@ func main() {
 	logger.Debug("created pipeline instance")
 	logger.Debug("initializing pipeline channels")
 
-	// TODO: Add proper data types
 	errChan := make(chan error, 10)
 	serverToParserChan := make(chan server.ServerTransferData, 1000)
 	parserToBufferChan := make(chan parser.ParserTransferData, 1000)
 	bufferToWriterChan := make(chan buffer.BufferTransferData, 1000)
 
-	// TODO: Make the server type more dynamic based on the config
-	serverType := CONFIG.ServerMode
-	logger.Debug(fmt.Sprintf("selecting server node for mode %s", serverType))
+	logger.Debug("selecting server node based on config")
 
-	var serverNode pipeline.Node
-	switch serverType {
-	case config.ServerModeUDP:
-		serverNode = pipeline.NewPipelineNode(
+	notificationChan := make(chan os.Signal, 1)
+	signal.Notify(notificationChan, os.Interrupt, syscall.SIGTERM)
+
+	if CONFIG.UDPServer.Enabled {
+		logger.Debug("UDP server enabled in config, adding UDP server node to pipeline")
+		udpServerNode := pipeline.NewPipelineNode(
 			"UDP Server",
 			logger,
 			nil,
@@ -114,8 +116,12 @@ func main() {
 			errChan,
 			server.UDPServerProcessor,
 		)
-	case config.ServerModeTCP:
-		serverNode = pipeline.NewPipelineNode(
+		pl.AddNode(udpServerNode)
+	}
+
+	if CONFIG.TCPServer.Enabled {
+		logger.Debug("TCP server enabled in config, adding TCP server node to pipeline")
+		tcpServerNode := pipeline.NewPipelineNode(
 			"TCP Server",
 			logger,
 			nil,
@@ -123,12 +129,21 @@ func main() {
 			errChan,
 			server.TCPServerProcessor,
 		)
-	default:
-		logger.Critical("unsupported server type: " + string(serverType))
-		panic("unsupported server type: " + string(serverType))
+		pl.AddNode(tcpServerNode)
 	}
 
-	pl.AddNode(serverNode)
+	if CONFIG.TLSServer.Enabled {
+		logger.Debug("TLS server enabled in config, adding TLS server node to pipeline")
+		tlsServerNode := pipeline.NewPipelineNode(
+			"TLS Server",
+			logger,
+			nil,
+			serverToParserChan,
+			errChan,
+			server.TLSServerProcessor,
+		)
+		pl.AddNode(tlsServerNode)
+	}
 
 	logger.Debug("added server node to pipeline")
 
@@ -187,6 +202,13 @@ func main() {
 	}()
 
 	logger.Info("pipeline started successfully")
+
+	// Handle graceful shutdown on interrupt signal
+	go func() {
+		<-notificationChan
+		logger.Info("interrupt signal received, shutting down pipeline...")
+		pl.Stop()
+	}()
 
 	pl.Wait()
 	logger.Debug("pipeline wait completed")

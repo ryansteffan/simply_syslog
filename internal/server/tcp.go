@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/ryansteffan/simply_syslog/internal/config"
 	"github.com/ryansteffan/simply_syslog/internal/pipeline"
@@ -15,7 +17,7 @@ func TCPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 		api.SendError(err)
 	}
 
-	addr, err := net.ResolveTCPAddr("tcp", CONFIG.BindAddress+":"+CONFIG.TCPPort)
+	addr, err := net.ResolveTCPAddr("tcp", CONFIG.TCPServer.BindAddress+":"+CONFIG.TCPServer.Port)
 	if err != nil {
 		api.SendError(err)
 	}
@@ -25,38 +27,70 @@ func TCPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 		api.SendError(err)
 	}
 
-	logger.Info("TCP server started on " + CONFIG.BindAddress + ":" + CONFIG.TCPPort)
-	logger.Debug(fmt.Sprintf("TCP listener ready on %s", listener.Addr()))
+	ctx := api.GetNodeContext()
+	wg := api.GetNodeWaitGroup()
+
+	// HashSet for active connections
+	connections := make(map[*net.TCPConn]struct{})
+	var connectionsMutex sync.Mutex
+
+	logger.Info("TCP server started on " + CONFIG.TCPServer.BindAddress + ":" + CONFIG.TCPServer.Port)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-ctx.Done()
+		listener.Close()
+
+		connectionsMutex.Lock()
+		for conn := range connections {
+			conn.Close()
+		}
+		connectionsMutex.Unlock()
+
+		logger.Info("TCP server shut down")
+	}()
+
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
-			api.SendError(err)
-			continue
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				api.SendError(err)
+				continue
+			}
 		}
-		logger.Debug(fmt.Sprintf("accepted TCP connection from %s", conn.RemoteAddr()))
 
-		api.GetNodeWaitGroup().Add(1)
-		go func() {
-			defer api.GetNodeWaitGroup().Done()
-			buffer := make([]byte, 1024)
+		connectionsMutex.Lock()
+		connections[conn] = struct{}{}
+		connectionsMutex.Unlock()
+
+		wg.Add(1)
+		go func(c *net.TCPConn) {
+			defer wg.Done()
+			defer func() {
+				c.Close()
+				connectionsMutex.Lock()
+				delete(connections, c)
+				connectionsMutex.Unlock()
+			}()
+
+			// TODO: Finish TCP server, add octet counting
 			for {
-				n, err := conn.Read(buffer)
+				c.SetDeadline(time.Now().Add(10 * time.Second))
+				buffer := make([]byte, CONFIG.TCPServer.MaxMessageSize)
+				n, err := c.Read(buffer)
 				if err != nil {
-					logger.Error("Error reading from TCP connection: " + err.Error())
 					return
 				}
-				data := make([]byte, n)
-				copy(data, buffer[:n])
-				logger.Debug(fmt.Sprintf("received TCP message from %s with %d byte(s)", conn.RemoteAddr(), len(data)))
-				api.Send(
-					ServerTransferData{
-						Message: data,
-						Meta: map[string]string{
-							"protocol": "tcp",
-						},
-					},
-				)
+				if n > CONFIG.TCPServer.MaxMessageSize {
+					logger.Warn(fmt.Sprintf("received TCP message from %s that exceeds the maximum message size of %d bytes, ignoring", c.RemoteAddr(), CONFIG.TCPServer.MaxMessageSize))
+					continue
+				}
+
 			}
-		}()
+		}(conn)
 	}
 }

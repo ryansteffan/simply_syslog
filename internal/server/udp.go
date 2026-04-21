@@ -14,14 +14,14 @@ type ServerTransferData struct {
 }
 
 func UDPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
-	CONFIG, err := config.GetConfig()
+	conf, err := config.GetConfig()
 	logger := api.GetNodeLogger()
 
 	if err != nil {
 		api.SendError(err)
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", CONFIG.BindAddress+":"+CONFIG.UDPPort)
+	addr, err := net.ResolveUDPAddr("udp", conf.UDPServer.BindAddress+":"+conf.UDPServer.Port)
 	if err != nil {
 		api.SendError(err)
 	}
@@ -31,19 +31,36 @@ func UDPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
 		api.SendError(err)
 	}
 
-	buffer := make([]byte, 1024)
-	logger.Info("UDP server started on " + CONFIG.BindAddress + ":" + CONFIG.UDPPort)
+	buffer := make([]byte, conf.UDPServer.MaxMessageSize)
+	logger.Info("UDP server started on " + conf.UDPServer.BindAddress + ":" + conf.UDPServer.Port)
 	logger.Debug(fmt.Sprintf("UDP listener ready on %s", conn.LocalAddr()))
+
+	ctx := api.GetNodeContext()
+	go func() {
+		<-ctx.Done()
+		logger.Info("shutting down UDP server")
+		conn.Close()
+	}()
+
 	for {
-		n, _, err := conn.ReadFromUDP(buffer)
+		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			api.SendError(err)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				api.SendError(err)
+				continue
+			}
+		}
+		if n > conf.UDPServer.MaxMessageSize {
+			logger.Warn(fmt.Sprintf("received UDP message from %s that exceeds the maximum message size of %d bytes, ignoring", addr.String(), conf.UDPServer.MaxMessageSize))
 			continue
 		}
 
 		message := make([]byte, n)
 		copy(message, buffer[:n])
-		logger.Debug(fmt.Sprintf("received UDP message with %d byte(s)", len(message)))
+		logger.Debug(fmt.Sprintf("received UDP message from %s with %d byte(s)", addr.String(), len(message)))
 		api.Send(
 			ServerTransferData{
 				Message: message,

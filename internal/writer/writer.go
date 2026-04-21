@@ -43,23 +43,29 @@ func WriterProcessor(api pipeline.ProcessorAPI[buffer.BufferTransferData, any]) 
 	}
 
 	for {
-		data, ok := api.Receive()
-		if !ok {
-			api.SendError(fmt.Errorf("an error receiving messages in the writer took place"))
-			continue
-		}
-		logger.Debug(fmt.Sprintf("writer stage received message with %d byte(s)", len(data.RawMessage)))
-		for name, Writer := range drivers.GetRegisteredWriters() {
-			if Writer.IsEnabled() {
-				logger.Debug(fmt.Sprintf("writing message with driver %q", name))
-				err := Writer.Write(data)
-				if err != nil {
-					logger.Error(fmt.Sprintf("Error writing message with writer %s: %v\n", name, err))
-				}
-			} else {
-				logger.Debug(fmt.Sprintf("skipping disabled writer driver %q", name))
+		select {
+		case <-api.GetNodeContext().Done():
+			logger.Info("shutting down writer")
+			return
+		default:
+			data, ok := api.Receive()
+			if !ok {
+				api.SendError(fmt.Errorf("an error receiving messages in the writer took place"))
+				continue
 			}
+			logger.Debug(fmt.Sprintf("writer stage received message with %d byte(s)", len(data.RawMessage)))
+			for name, Writer := range drivers.GetRegisteredWriters() {
+				if Writer.IsEnabled() {
+					logger.Debug(fmt.Sprintf("writing message with driver %q", name))
+					err := Writer.Write(data)
+					if err != nil {
+						logger.Error(fmt.Sprintf("Error writing message with writer %s: %v\n", name, err))
+					}
+				} else {
+					logger.Debug(fmt.Sprintf("skipping disabled writer driver %q", name))
+				}
+			}
+			logger.Debug("writer stage completed dispatch for current message")
 		}
-		logger.Debug("writer stage completed dispatch for current message")
 	}
 }
