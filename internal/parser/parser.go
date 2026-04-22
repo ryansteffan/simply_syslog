@@ -22,6 +22,7 @@ func ParserProcessor(api pipeline.ProcessorAPI[server.ServerTransferData, Parser
 	regexConfig, err := config.GetRegexConfig()
 	if err != nil {
 		api.SendError(err)
+		return
 	}
 
 	if logger.GetLogLevel() >= applogger.DEBUG {

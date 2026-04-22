@@ -43,28 +43,33 @@ func main() {
 	if _, err := os.Stat("./config"); os.IsNotExist(err) {
 		err := os.Mkdir("./config", 0755)
 		if err != nil {
-			panic(err)
+			fmt.Printf("failed to create config directory: %s\n", err.Error())
+			return
 		}
 	}
 
 	err := config.GenerateConfig(*generateConfigFromEnv)
 	if err != nil {
-		panic(err)
+		fmt.Printf("failed to generate config: %s\n", err.Error())
+		return
 	}
 
 	err = config.GenerateRegexConfig(*generateRegexFromEnv)
 	if err != nil {
-		panic(err)
+		fmt.Printf("failed to generate regex config: %s\n", err.Error())
+		return
 	}
 
 	err = config.GenerateWriterConfig(*generateWriterConfigFromEnv)
 	if err != nil {
-		panic(err)
+		fmt.Printf("failed to generate writer config: %s\n", err.Error())
+		return
 	}
 
 	CONFIG, err := config.GetConfig()
 	if err != nil {
-		panic(err)
+		fmt.Printf("failed to load config: %s\n", err.Error())
+		return
 	}
 
 	logger, err := applogger.NewLogger(
@@ -73,9 +78,9 @@ func main() {
 		applogger.CONSOLE,
 		nil,
 	)
-
 	if err != nil {
-		panic(err)
+		fmt.Printf("failed to initialize logger: %s\n", err.Error())
+		return
 	}
 
 	logger.Debug(fmt.Sprintf(
@@ -189,7 +194,7 @@ func main() {
 	err = pl.Start()
 	if err != nil {
 		logger.Critical("failed to start pipeline: " + err.Error())
-		panic(err)
+		return
 	}
 
 	logger.Debug("pipeline start returned successfully")
@@ -207,7 +212,10 @@ func main() {
 	go func() {
 		<-notificationChan
 		logger.Info("interrupt signal received, shutting down pipeline...")
-		pl.Stop()
+		err = pl.Stop()
+		if err != nil {
+			logger.Error("failed to stop pipeline gracefully: " + err.Error())
+		}
 	}()
 
 	pl.Wait()
