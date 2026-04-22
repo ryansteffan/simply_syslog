@@ -1,8 +1,14 @@
 services:
   simply_syslog:
-    image: simply_syslog:latest
+    image: ryansteffan/simply_syslog:latest
     container_name: simply_syslog
     restart: always
+    environment:
+      - UDP_SERVER_ENABLED=true
+      - UDP_MAX_MESSAGE_SIZE=1024
+      - SELF_LOGGING_LEVEL=6
+      - BUFFER_MAX_ITEMS=1024
+      - BUFFER_MAX_LIFETIME=15
     ports:
       - "514:514/udp"
       - "514:514/tcp"

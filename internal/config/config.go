@@ -66,13 +66,13 @@ var defaultConfig = &Config{
 		MaxMessageSize: 1024,
 	},
 	TCPServer: SocketServerConfig{
-		Enabled:        true,
+		Enabled:        false,
 		Port:           "514",
 		BindAddress:    "0.0.0.0",
 		MaxMessageSize: 1024,
 	},
 	TLSServer: SocketServerConfig{
-		Enabled:        true,
+		Enabled:        false,
 		Port:           "6514",
 		BindAddress:    "0.0.0.0",
 		MaxMessageSize: 1024,

@@ -11,6 +11,7 @@ import (
 )
 
 func TCPServerProcessor(api pipeline.ProcessorAPI[string, ServerTransferData]) {
+	panic("TCP Server not implemented")
 	logger := api.GetNodeLogger()
 	CONFIG, err := config.GetConfig()
 	if err != nil {
