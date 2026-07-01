@@ -1,0 +1,11 @@
+services:
+  simply_syslog:
+    image: simply_syslog:latest
+    container_name: simply_syslog
+    restart: always
+    build:
+      context: .
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
+      - "6514:6514/tcp"

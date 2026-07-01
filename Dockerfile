@@ -1,36 +1,52 @@
-FROM python
+FROM golang:1.25.1-bookworm AS builder
 
-# Sets the enviroment variables used for configuration of the server.
-ENV PROTOCOL "UDP"
-ENV BIND_ADDRESS "0.0.0.0"
-ENV UDP_PORT "514"
-ENV TCP_PORT "514"
-ENV MAX_TCP_CONNECTIONS "10"
-ENV BUFFER_LENGTH "32"
-ENV BUFFER_LIFESPAN "5"
-ENV MAX_MESSAGE_SIZE "1024"
-ENV SYSLOG_PATH "/var/log/simply_syslog/"
-ENV DEBUG_MESSAGES "True"
+WORKDIR /src
 
-# Makes the needed paths for storing the server and storing the log file.
-RUN mkdir "/simply_syslog/"
-RUN mkdir $SYSLOG_PATH
+COPY . .
 
-# Copys the code for the server to the docker image.
-COPY config/server_logging_config.json "/simply_syslog/config/"
-COPY src "/simply_syslog/src/"
-COPY init.py "/simply_syslog/"
-COPY main.py "/simply_syslog/"
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
-# Makes a volume used to save the file that stores the syslogs from remote hosts.
-VOLUME $SYSLOG_PATH
+RUN go mod download
 
-# Exposes the needed ports for the server.
-EXPOSE $UDP_PORT/udp
-EXPOSE $TCP_PORT/tcp
+RUN CGO_ENABLED=1 go build -o /build/simply-syslog /src/cmd/simplysyslog/main.go
 
-# Sets a work dir for where the CMD is to run from.
-WORKDIR "/simply_syslog/"
 
-# Runs the init.py file to set up the server config, and start the server.
-CMD ["python3", "./init.py"]
+FROM debian:bookworm-slim AS runner
+
+# UDP Server Config
+ENV UDP_SERVER_ENABLED="true"
+ENV UDP_BIND_ADDRESS="0.0.0.0"
+ENV UDP_PORT="514"
+ENV UDP_MAX_MESSAGE_SIZE="1024"
+
+# TCP Server Config
+ENV TCP_SERVER_ENABLED="false"
+ENV TCP_BIND_ADDRESS="0.0.0.0"
+ENV TCP_PORT="514"
+ENV TCP_MAX_MESSAGE_SIZE="1024"
+
+# TLS Server Config
+ENV TLS_SERVER_ENABLED="false"
+ENV TLS_BIND_ADDRESS="0.0.0.0"
+ENV TLS_PORT="6514"
+ENV TLS_MAX_MESSAGE_SIZE="1024"
+
+# Logging and buffer settings
+ENV SELF_LOGGING_LEVEL="7"
+ENV BUFFER_MAX_ITEMS="1024"
+ENV BUFFER_MAX_LIFETIME="15"
+
+WORKDIR /simply_syslog/
+
+COPY --from=builder /build/simply-syslog .
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/*
+
+# Map volumes for configuration, logs, and syslog database data.
+VOLUME [ "/simply_syslog/config", "/simply_syslog/logs", "/syslog/" ]
+
+EXPOSE ${UDP_PORT}/udp
+EXPOSE ${TCP_PORT}/tcp
+EXPOSE ${TLS_PORT}/tcp
+
+CMD [ "./simply-syslog", "-env-gen-config" ]
