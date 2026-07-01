@@ -25,19 +25,15 @@ that is easy to configure, deploy, and scale.
 ## Features:
 
 - UDP syslog support
-- Docker-first deployment and configuration
-- Highly configurable via environment variables or config file
-- Efficient message buffering and file logging
-- Designed for high-throughput and reliability
-
+- Supports docker
+- Highly configurable
+- Able to handle large numbers of requests
 
 ## Upcoming features:
 
-- TCP syslog support (in progress)
-- Graceful shutdown and restart (in progress)
-- Database logging (planned)
-- Support for encryption (planned)
-
+- Migration to Go
+- Support for TCP
+- Support for encryption
 
 # How to Use:
 
